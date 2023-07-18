@@ -27,13 +27,12 @@ library(reshape2)
 library(lme4)
 library(lmerTest)
 library(ggplot2)
-library(r2glmm)
-library(sjstats)
+#library(r2glmm)
+#library(sjstats)
 library(doSNOW)
 library(parallel)
 library(dplyr)
 library(reticulate)
-library(biogeom)
 ```
 
 ## Linear mixed models
@@ -100,38 +99,42 @@ build.individual.model <- function(drug.name, dataset){
 }
 ```
 
-**log10.linear.mixed.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10 scale of the concentrations.
-
 ```{r}
-# Setting the dose values to their log10 transform
+###############################
 Doseresponse <- AllPenDoseresponse %>%
-                  mutate(dose = log10_dose) %>%
+                  mutate(dose = log10_1_dose) %>%
                   filter(is.finite(dose))
 
-# Sort the dataset by dose
-sorted_data <- subset[order(subset$dose), ]
-# Calculate the medians of 'value' at each dose
-medians <- tapply(sorted_data$value, sorted_data$dose, FUN = median)
-# Generate a sequence of intermediate doses
-intermediate_dose <- seq(min(subset$dose), max(subset$dose), length.out = 100)
-# Interpolate the medians at the intermediate doses
-interpolated_values <- approx(x = names(medians), y = medians, xout = intermediate_dose)$y
-# Create a data frame with the interpolated data
-interpolated_data <- data.frame(dose = intermediate_dose, value = interpolated_values)
-# Combine the original data and the interpolated data
-combined_data <- rbind(select(sorted_data,-ID), interpolated_data)
-# Sort the combined data by dose
-combined_data <- combined_data[order(combined_data$dose), ]
-
-Subset <- Doseresponse %>% 
-                  filter(feature == !!feature.name) %>%
-                  filter(drug == !!drug.name)  %>%
-                  select(c("ID", "dose", "value"))
+feature.name="Bcells_CREB_IFNa"
+drug.name="Benzylpenicillin"
+Subset <- subset(Doseresponse,
+                  (feature == feature.name) & (drug == drug.name),
+                  select=c("ID", "dose", "value"))
 id=1
 # Subset at the individual level
-subset <- Subset %>%
-                  filter(ID==id) %>%
-                  select(c("ID", "dose", "value"))
+data <- subset(Subset,
+                  ID==id,
+                  select=c("ID", "dose", "value"))
+data
+# Sort the dataset by dose
+sorted_data <- data[order(data$dose), ]
+print(sorted_data)
+# Generate a sequence of intermediate doses
+intermediate_dose <- seq(min(data$dose), max(data$dose), length.out = 100)
+# Interpolate the medians at the intermediate doses
+interpolated_values <- approx(x = sorted_data$dose, y = sorted_data$value, xout = intermediate_dose)$y
+# Create a data frame with the interpolated data
+interpolated_data <- data.frame(dose = intermediate_dose, value = interpolated_values)
+# Sort the combined data by dose
+interpolated_data <- interpolated_data[order(interpolated_data$dose), ]
+interpolated_data
+
+ggplot() +
+  geom_point(data = interpolated_data, aes(x = dose, y = value)) +
+  geom_point(data = subset, aes(x = dose, y = value), color = "red")
+#fitmodel <- nls(value ~a/(1 + exp(-b * (dose-c)) ) + d, start=list(a=max(interpolated_data$value),b=sign(data$value[length(data$value)]-data$value[1]),c=1, d=min(interpolated_data$value)), data=interpolated_data)
+library(aomisc)
+
 # building a linear model only when the response is not constant (we get an error message otherwise...)
 if (length(unique(subset$value)) > 1){
   # Linear model and its scores
@@ -173,6 +176,16 @@ data.frame(feature = feature.name,
 
 
 
+#####################
+```
+
+**log10.linear.mixed.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10 scale of the concentrations.
+
+```{r}
+# Setting the dose values to their log10 transform
+Doseresponse <- AllPenDoseresponse %>%
+                  mutate(dose = log10_dose) %>%
+                  filter(is.finite(dose))
 
 # Set up parallel backend using doParallel
 cl <- makeSOCKcluster(detectCores())
