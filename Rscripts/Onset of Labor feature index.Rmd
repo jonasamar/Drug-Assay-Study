@@ -7,10 +7,16 @@ Here we are building a model similar to the one of the OOL study but on the data
 
 ## Paths
 
+**Copy Paste Here the path to your Drug-Assay-Study folder**
+
 ```{r}
-setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
-OOL_path="/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv"
-drug_assay_path="/Users/jonasamar/Stabl/Drug Study/Drug assay csv"
+my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
+```
+
+```{r}
+setwd(paste0(my_path,"/Rscripts"))
+OOL_path=paste0(my_path,"/Onset of Labor csv")
+drug_assay_path=paste0(my_path,"/Drug assay csv")
 ```
 
 ## Libraries

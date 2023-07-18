@@ -7,9 +7,15 @@ Here we want to quantify the effect of the drugs on each feature. To do that, we
 
 ## Paths
 
+**Copy Paste Here the path to your Drug-Assay-Study folder**
+
 ```{r}
-setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
-out_path="/Users/jonasamar/Stabl/Drug Study/Drug assay csv"
+my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
+```
+
+```{r}
+setwd(paste0(my_path,"/Rscripts"))
+out_path=paste0(my_path,"/Drug assay csv")
 ```
 
 ## Libraries

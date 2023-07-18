@@ -5,11 +5,17 @@ output: html_notebook
 
 ## Paths
 
+**Copy Paste Here the path to your Drug-Assay-Study folder**
+
 ```{r}
-setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
-funct_path = "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv"
-path_to_penalization_file = "/Users/jonasamar/Stabl/Drug Study/Drug assay csv/penalization matrix drug assay.xlsx"
-out_path = "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv"
+my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
+```
+
+```{r}
+setwd(paste0(my_path,"/Rscripts"))
+funct_path=paste0(my_path,"/Onset of Labor csv/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv")
+path_to_penalization_file=paste0(my_path,"/Drug assay csv/penalization matrix drug assay.xlsx")
+out_path=paste0(my_path,"/Onset of Labor csv")
 ```
 
 ## Libraries
