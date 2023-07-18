@@ -1,0 +1,779 @@
+---
+title: "Drug assay scores and visualization"
+output: html_notebook
+---
+
+## Paths
+
+```{r}
+setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
+OOL_path <- "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv"
+drug_assay_path <- "/Users/jonasamar/Stabl/Drug Study/Drug assay csv"
+```
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(tidyselect)
+library(reshape2)
+library(dplyr)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+library(paletteer)
+library(tidyr)
+library(janitor)
+library(lme4)
+library(lmerTest)
+library(utils)
+library(ggplot2)
+library(r2glmm)
+library(sjstats)
+library(gridExtra)
+```
+
+## Loading Data and Models
+
+**OOL data and models**
+
+```{r}
+# df_model
+load(paste0(OOL_path, "/pen_model_curves_cytof.rda"))
+# curve.classification <- df_sum
+curve.classification <- read.csv(paste0(OOL_path, "/pen_classification_curves_cytof.csv"))
+# penalized dataset with outcomes (DOS) ante partum
+OOL_data <- read.csv(paste0(OOL_path, "/immunome_noEGA_DOS_pen_OOL.csv")) %>%   
+            filter(DOS <= 0) # we only are interested in DOS <=0
+# outcomes
+DOS <- OOL_data$DOS
+# results from univariate analysis on OOL data
+spearman_cor <- read_csv(paste0(OOL_path, "/Univariate regated OOL/SpearmanCorrelationsPval.csv"))
+```
+
+**Drug Assay data and models**
+
+```{r}
+# model.scores
+load(paste0(drug_assay_path, "/lin&quad mixed model scores.rda"))
+# mixed.model
+load(paste0(drug_assay_path, "/lin&quad mixed models.rda"))
+# all.slopes
+load(paste0(drug_assay_path, "/lin&quad mixed models slopes.rda"))
+# Dosereponse
+load(paste0(drug_assay_path, "/pen dose response.rda"))
+```
+
+## Scores
+
+Here we want to compare the drug effect on each feature to the "normal" behavior of the feature modeled in OOL study.
+
+### Auxiliaries score functions
+
+**drug.effect**
+
+```{r}
+# Function which return:
+# +1 for activating drugs
+# -1 for inhibiting drugs
+# 0 for non active (or uncertain) drugs
+# based on the slope of the model and its p-value
+
+drug.effect <- function(slope, pval, slope.threshold, pval.threshold){
+  if ((abs(slope) > slope.threshold) & (pval < pval.threshold)){
+    return(slope/abs(slope))
+  }
+  else{
+    return(0)
+  }
+}
+```
+
+**feature.normal.behavior.at.TTL**
+
+```{r}
+# Function which returns
+# 1 if the model (of the OOL feature) is increasing at TTL
+# -1 if the model (of the OOL feature) is decreasing at TTL
+# NA if the behavior of the feature is inconclusive (missing model or too weak slope)
+# based on the model (contained in a list) itself and its p-value
+
+feature.normal.behavior.at.TTL <- function(model, pval, slope.threshold, pval.threshold, TTL){
+  if (length(pval) == 0 || is.na(pval) ||pval > pval.threshold || length(model) == 0){
+    return(NA)
+  }
+  else{
+    # Here we focus un the derivative around 0 to estimate the behavior of the feature
+    model <- model[[1]]
+    quadratic <- (length(model) == 3)
+
+    # Derivative of the model at TTL
+    # for quadratic model
+    if (quadratic){
+      deriv <- 2*model[['DOS2']]*TTL + model[['DOS']]
+    } 
+    # for linear model
+    else{
+      deriv <- model[['DOS']]
+    }
+    
+    # Returning effect coefficient
+    if (abs(deriv) > slope.threshold){
+      return(deriv/abs(deriv))
+    }
+    else{
+      return(NA)
+    }
+  }
+}
+```
+
+**create.drug.effect.data.frame**
+
+```{r}
+# Function which creates a dataframe with 
+# 1 when the drug is affecting the feature the opposite direction of its normal behavior at TTL
+# -1 when the drug is affecting the feature the same direction of its normal behavior at TTL
+# 0 when the effect of the drug is null
+# NA when behavior of the feature is null or hard to estimate (high p-value) or if we miss data in the drug assay study
+
+create.drug.effect.data.frame <- function(drug.name,
+                                          normal.behavior.pval.threshold, 
+                                          normal.behavior.slope.threshold, 
+                                          drug.pval.threshold, 
+                                          drug.slope.threshold,
+                                          TTL){
+  
+  # Dataframe feature ~ stimulation containing the final effect on a drug on each feature under each stimulation
+  drug.effect.dataframe <- model.scores %>%
+                        filter(drug == drug.name) %>%
+                        rowwise() %>%
+                        mutate(drug.behavior = drug.effect(Slope, 
+                                                            pval, 
+                                                            slope.threshold = drug.slope.threshold, 
+                                                            pval.threshold = drug.pval.threshold)) %>%
+                        mutate(population = str_extract(feature, "^[^_]+"),
+                               reagent_stim = str_extract(feature, "(?<=_).*$")) %>%
+                        select(population, drug.behavior, reagent_stim) %>%
+                        pivot_wider(names_from = reagent_stim, values_from = drug.behavior)
+  
+  # Concatenation of all information on the feature models + normal.behavior = +1, -1 or NA
+  model.info <- merge(df_models, curve.classification, by.x = "feature", by.y = "cytof") %>%
+                rowwise() %>%
+                mutate(normal.behavior = feature.normal.behavior.at.TTL(model,
+                                                                        pval, 
+                                                                        normal.behavior.slope.threshold,
+                                                                        normal.behavior.pval.threshold,
+                                                                        TTL))
+
+  # Dataframe feature ~ stimulation containing the values of normal.behavior
+  behavior.dataframe <- model.info %>%
+                          mutate(population = str_extract(feature, "^[^_]+"),
+                                 reagent_stim = str_extract(feature, "(?<=_).*$")) %>%
+                          select(population, normal.behavior, reagent_stim) %>%
+                          pivot_wider(names_from = reagent_stim, values_from = normal.behavior) %>%
+                          # removing features not measured in both studies (drugs and OOL)
+                          # `STAT3_LPS`, `STAT5_LPS`, `STAT1_LPS`, `STAT6_LPS`, `STAT1_GMCSF`
+                          # "STAT1_unstim"
+                          filter(population %in% drug.effect.dataframe$population) %>%
+                          select(one_of(colnames(drug.effect.dataframe)))
+                        
+  # Dataframe feature ~ stimulation containing the product of behavior.matrix and drug.effect.matrix
+  drug.final.effect.dataframe<- merge(pivot_longer(select(behavior.dataframe, 
+                                                           one_of(colnames(drug.effect.dataframe))), 
+                                                   cols = -population, 
+                                                   names_to = "reagent_stim", 
+                                                   values_to = "normal.behavior"),
+                                      pivot_longer(select(drug.effect.dataframe,
+                                                          one_of(colnames(behavior.dataframe))), 
+                                                   cols = -population, 
+                                                   names_to = "reagent_stim", 
+                                                   values_to = "drug.behavior"),
+                                      by = c("population", "reagent_stim")) %>%
+                                rowwise() %>%
+                                mutate(drug.final.effect = ifelse(is.na(normal.behavior) ||
+                                                                    is.na(drug.behavior),
+                                                                  NA,
+                                                                  -normal.behavior*drug.behavior)) %>%
+                                select(population, reagent_stim, drug.final.effect) %>%
+                                pivot_wider(names_from = reagent_stim, values_from = drug.final.effect)
+
+  return(drug.final.effect.dataframe)
+}
+```
+
+### Features of interest
+
+For now, we don't have a ML model with selected features helping us discriminate which features are more important to look at so we are looking at two sets of features :
+- the top 15 Cytof features from the OOL paper
+- the features from the univariate analysis with an absolute Spearman score > 0.3
+
+**Top 15 features from OOL paper**
+
+```{r}
+# Top immunome features from the OOL study
+# we associate a coeff +1 (increasing) or -1 (decreasing) to the features
+OOL.top.immunome.features <- list("CD56loCD16posNK_STAT1_IFNa"=1,
+                                  # Granulocytes missing in the drug assay study
+                                  "CD56hiCD16negNK_STAT1_IFNa"=1,
+                                  "CD4Tnaive_MAPKAPK2_IFNa"=1,
+                                  "ncMCs_CREB_GMCSF"=-1,
+                                  "CD8Tcm_MAPKAPK2_unstim"=1, #-1 at TTL = 0
+                                  "CD8Tem_MAPKAPK2_unstim"=1, #-1 at TTL = 0
+                                  "pDCs_STAT1_IFNa"=1,
+                                  "Bcells_MAPKAPK2_LPS"=1,
+                                  "CD4Tem_MAPKAPK2_unstim"=1, #-1 at TTL = 0
+                                  "CD8Tcm_MAPKAPK2_IFNa"=1, 
+                                  "CD8Tem_MAPKAPK2_IFNa"=1,
+                                  # Bcells missing in the drug assay study
+                                  "CD4Tem_NFkB_IL246"=-1,
+                                  "CD4Tcm_IkB_unstim"=1, #-1 at TTL = 0
+                                  "mDCs_STAT6_IFNa"=1, #-1 at TTL = 0
+                                  "pDCs_STAT6_IFNa"=1, #-1 at TTL = 0
+                                  "mDCs_MAPKAPK2_unstim"=-1, 
+                                  "pDCs_MAPKAPK2_unstim"=-1
+                                  )
+```
+
+**Top features from the univariate analysis**
+
+```{r}
+# Top immunome features from the univariate analysis on OOL data
+# we associate a coeff +1 (increasing) or -1 (decreasing) to the features
+
+univariate.OOL.features <- apply(spearman_cor[abs(spearman_cor$`Spearman corr`) > 0.3,], # taking features with |Spearmanr| > 0.3
+                                 1,
+                                 function(row){ # associating the feature name to +1 (increasing) or -1 (decreasing)
+                                   key <- row[[1]]
+                                   if (!is.na(key)) {
+                                     value <- as.numeric(row[[2]])/abs(as.numeric(row[[2]]))
+                                     setNames(list(value), key)
+                                   } 
+                                 }) %>%
+                                Filter(function(x) !is.null(x), .) %>%
+                                unlist(recursive=FALSE)
+```
+
+### Drugs ranking
+
+Here we rank the drugs based on their effect on the chosen features of interest. We associate a +1 score when the drug has an effect which is opposite to the "normal" behavior/ trend of the feature and -1 when the effect of the drug is colinear to the "normal" feature behavior.
+
+```{r}
+# Chosing features of interest
+feature_choice <- "top_OOL_features"
+OOL_features <- OOL.top.immunome.features
+
+# Chosing thresholds over or under which we consider the effect of the drug as relevant
+slope.threshold <- 0
+pval.threshold <- 1e-1
+```
+
+Calculation of the scores and ranking of the features.
+
+**drug.ranking :** dataframe containing the name of the drugs and their score.
+
+```{r}
+drug.ranking <- data.frame(drug = character(),
+                           score = numeric(),
+                           stringsAsFactors = FALSE)
+for (drug in unique(mixed.model$drug)){
+  score <- 0
+  # We sum the scores over all the features for each drug
+  for (feature in names(OOL_features)){
+    # Getting the drug effect on the feature
+    slope <- model.scores[(model.scores$feature == feature) & (model.scores$drug == drug),]$Slope
+    pval <- model.scores[(model.scores$feature == feature) & (model.scores$drug == drug),]$pval
+    drug_effect <- ifelse(length(slope)*length(pval) == 0, # sometimes the values of slope and/or pval is empty
+                          0,
+                          drug.effect(slope, pval, slope.threshold, pval.threshold))
+    # Adding the individual scores of the drug each feature 
+    score <- score - drug_effect*OOL_features[[feature]]
+  }
+  # Adding the drug and its score to drug.ranking
+  drug.ranking <- rbind(drug.ranking,
+                        data.frame(drug=drug,
+                                   score=score,
+                                   stringsAsFactors = FALSE))
+}
+# Arranging the drugs to see the best drugs on top
+drug.ranking <- drug.ranking %>% arrange(desc(score))
+drug.ranking
+```
+
+## Visualization
+
+### Mixed models versus "normal" behavior
+
+Auxiliary function to plot the mixed model.
+
+```{r}
+# Function taking the name of a feature, name of a drug and a pvalue
+# Returning a plot of the mixed model corresponding to the feature and drug
+
+plot_drug_mixed_model <- function(target_drug, target_feature, p_value){
+  # Getting the mixed model associated to the target_drug and the target_feature
+  target_model <- mixed.model$model[mixed.model$feature == target_feature & mixed.model$drug == target_drug][[1]]
+  # Getting the class of the mixed model
+  class <- unique(all.slopes[all.slopes$feature == target_feature & all.slopes$drug == target_drug,]$class)
+  
+  ### PLOT THE MIXED QUATRATIC MODEL
+  if (class == "quadratic"){
+    # Coefficients of the selected model
+    model_coefs <- coef(target_model)$ID %>% 
+                      rename(Intercept = `(Intercept)`, b = dose, a = dose2) %>%
+                      rownames_to_column("ID")
+    
+    # Subset of the data for the chosen feature and drug
+    data <- Doseresponse %>% 
+                filter(feature == !!target_feature) %>%
+                filter(drug == !!target_drug) %>%
+                select(ID, dose, value)
+    
+    data_rani <- left_join(data, model_coefs, by = "ID") %>%
+                  group_by(dose)
+    
+    model_coefs <- model_coefs %>%
+                    group_by(ID) %>%
+                    slice(1)
+  
+    # Quadratic function
+    quadratic_fun <- function(x, a, b, intercept) {
+      return(intercept + b * x + a * x^2)
+    }
+  
+    # Plot
+    id_colors <- c("1" = "#F8766D", "2" = "#7CAE00", "3" = "#00BFC4", "4" = "#C77CFF")
+    plot <- suppressWarnings(ggplot(data = data_rani, 
+                                    mapping = aes(x = dose, 
+                                                  y = value, 
+                                                  colour = ID)) +
+                               geom_point(na.rm = T, alpha = 0.5))
+    for (id in unique(model_coefs$ID)){
+      plot <- plot + stat_function(fun = quadratic_fun,
+                                      args = list(a = model_coefs[model_coefs$ID == id, ]$a, 
+                                                  b = model_coefs[model_coefs$ID == id, ]$b, 
+                                                  intercept = model_coefs[model_coefs$ID == id, ]$Intercept),
+                                      n = 100,
+                                      geom = "line",
+                                      size = 1.,
+                                      color = id_colors[[id]])
+    }
+    plot <- plot + scale_color_manual(values = id_colors)
+  }
+  
+  ### PLOT THE MIXED LINEAR MODEL
+  if (class == "linear"){
+    # Coefficients of the selected model
+    model_coefs <- coef(target_model)$ID %>% 
+                      rename(Intercept = `(Intercept)`, Slope = dose) %>% 
+                      rownames_to_column("ID")
+    
+    # Subset of the data for the chosen feature and drug
+    data <- Doseresponse %>% 
+                filter(feature == !!target_feature) %>%
+                filter(drug == !!target_drug) %>%
+                select(ID, dose, value)
+    
+    data_rani <- left_join(data, model_coefs, by = "ID")
+    
+    # Plot
+    plot <- suppressWarnings(ggplot(data = data_rani, 
+                                    mapping = aes(x = dose, 
+                                                  y = value, 
+                                                  colour = ID)) +
+                               geom_point(na.rm = T, alpha = 0.5) +
+                               geom_abline(aes(intercept = Intercept, 
+                                               slope = Slope,
+                                               colour = ID),
+                                           size = 1.))
+  }
+  
+  # Removing unecessary labels and adding title
+  plot <- plot + 
+      ggtitle(paste(target_feature, pval, sep=",\np = ")) +
+      xlab(NULL) +  # Remove x-axis label
+      ylab(NULL) +  # Remove y-axis label
+      theme(legend.position = "none") +
+      theme(plot.title = element_text(size = 6))
+  
+  return(plot)
+}
+```
+
+Plotting the mixed models of the drug on the chosen features versus the normal behavior of the OOL feature in order to see if the trends are actually opposites (or colinear) and that the models fit the data.
+
+```{r}
+# Selecting a specific drug and plotting the comparison of the model of the features with the mixed model of the drug
+target_drug <- "Lansoprazole"
+# Time to labor of interest (will plot the derivative at this point)
+TTL <- -84
+
+plots <- list()
+i <- 0
+for (target_feature in names(OOL_features)) {
+  target_model <- mixed.model$model[mixed.model$feature == target_feature & mixed.model$drug == target_drug]
+  pval <- model.scores[(model.scores$feature == target_feature) & (model.scores$drug == target_drug),]$pval
+  
+  # We only plot features on which the score has been calculated (with mixed model having a pvalue < pval < pval.threshold)
+  if ((length(pval) > 0) && 
+      (pval < pval.threshold) && 
+      (length(target_model)>0)){
+    # Counting the number of plots
+    i <- i + 2
+    
+    ### PLOT THE MIXED LINEAR MODEL
+    model_coef_plot <- plot_drug_mixed_model(target_drug, target_feature, pval)
+    # Adding plot to the list of plots
+    plots[[target_feature]] <- model_coef_plot
+
+    
+    ### PLOT THE ASSOCIATED OOL FEATURE
+    # Getting the coefficients and class of the model
+    coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
+    
+    # Building the predictions
+    y <- OOL_data[, target_feature]
+    intercept <- coefs[['(Intercept)']]
+    if (length(coefs) == 3){ # quadratic model
+  
+      a <- coefs[['DOS2']]
+      b <- coefs[['DOS']]
+      y_pred <- intercept + b * DOS + a * DOS^2
+      y_deriv <- (2*a*TTL + b)*(DOS - TTL) + (intercept + b * TTL + a * TTL^2)
+    }
+    else{ # length(coefs) == 2, linear model
+      slope <- coefs[['DOS']]
+      y_pred <- intercept + slope * DOS
+      y_deriv <- slope*(DOS - TTL) + (intercept + slope * TTL)
+    }
+    df <- data.frame(x = DOS, y = y, y_pred = y_pred, y_deriv = y_deriv)
+    
+    # Getting pvalue of the model
+    pval <- curve.classification[curve.classification$cytof == target_feature,]$pval
+    # Plot
+    plot <- ggplot(df, aes(x = x, y = y)) +
+      geom_point(color = "blue", alpha = 0.5, size = 1) +
+      geom_line(aes(y = y_pred), color = "red", size = 0.7) +
+      geom_line(aes(y = y_deriv), linetype = "dashed", color = "red", size = 0.7) +
+      geom_vline(xintercept = TTL, linetype = "dashed", color = "red", size = 0.7) +
+      ggtitle(paste(target_feature, pval, sep=",\np = ")) +
+      xlab(NULL) +  # Remove x-axis label
+      ylab(NULL) +  # Remove y-axis label
+      theme(plot.title = element_text(size = 6))
+    # Adding plot to the list of plots
+    plots[[paste0(target_feature,".OOL")]] <- plot
+  }
+}
+
+# Saving the plots
+pdf(paste(drug_assay_path, "/", target_drug, "_on_", feature_choice,".pdf", sep = ""))
+for (j in 1:ceiling(i/16)){
+  grid.arrange(grobs = plots[(16*(j-1)+1):min(16*j,i)], nrow = 4, ncol = 4)
+}
+dev.off()
+```
+
+### Histograms
+
+>>> !!! Not so sure it is relevant !!!
+
+```{r}
+# Selecting a specific feature and plotting the histograms of the values/dose
+target_feature <- "CD56loCD16posNK_STAT1_IFNa"
+
+histo.plots <- list()
+for (target_drug in unique(mixed.model$drug)) {
+  # Subset of the data regarding the target_drug and target_feature
+  data <- Doseresponse %>% 
+              filter(feature == !!target_feature) %>%
+              filter(drug == !!target_drug) %>%
+              select(ID, dose, value)
+  
+  # Modifying the data by dividing each value by the mean of the patients values
+  mean_values <- data %>%
+                  group_by(ID) %>%
+                  summarize(mean_value = mean(value))
+  data_modified <- data %>%
+                  left_join(mean_values, by = "ID") %>%
+                  mutate(value = replace_na(value, 0)) %>%
+                  mutate(value = value / mean_value) %>%
+                  select(-mean_value)
+  
+  # Plot
+  histogram_plot <- data_modified %>%
+    ggplot(aes(x = dose, y=value, fill = ID)) + 
+    geom_col(color="white", na.rm=TRUE) +
+    guides(fill = "none") +  # Remove the color legend
+    ggtitle(target_drug) +
+    xlab(NULL) +  # Remove x-axis label
+    ylab(NULL) +  # Remove y-axis label
+    theme(plot.title = element_text(size = 12))
+  # Adding plot to the list of plots
+  histo.plots[[target_drug]] <- histogram_plot
+}
+
+# Printing the plots
+suppressWarnings(grid.arrange(grobs = histo.plots, nrow = 3, ncol = 5))
+```
+
+### Global visualization : heatmap
+
+```{r}
+# Function to plot the pheatmap of the final drug effect
+plot_pheatmap <- function(drug.name, drug.final.effect.dataframe){
+  my_colors <- c("blue", "white", "red")
+
+  data <- as.matrix(drug.final.effect.dataframe[, -1])
+  rownames(data) <- drug.final.effect.dataframe$population
+  
+  data[is.na(data)] <- 0
+  
+  pheatmap(data, 
+           color = my_colors,
+           na_color = "grey",
+           cluster_rows = TRUE,
+           cluster_cols = TRUE,
+           main = drug.name,
+           cellwidth = 10, 
+           cellheight = 10,
+           legend_breaks = c(-1, 0, 1),
+           legend_labels = c("Drug effect colinear\nto normal pregnancy", 
+                             "Missing Value\nor\nNot significant", 
+                             "Drug effect opposite\nto normal pregnancy")
+           )
+}
+```
+
+Saving the heat maps for a chosen set of thresholds.
+
+```{r}
+# Parameters for the heat map scores
+TTL <- -84
+normal.behavior.pval.threshold <- 1.
+normal.behavior.slope.threshold <- 1e-5
+drug.pval.threshold <- 1.
+drug.slope.threshold <- 0.
+
+# Plotting all the heat maps
+pdf(paste(drug_assay_path, "/Drug effect heatmaps TTL=",TTL, ".pdf", sep=""), width = 12, height = 6)
+for (target_drug in unique(mixed.model$drug)){
+  plot_pheatmap(target_drug, 
+                create.drug.effect.data.frame(
+                  target_drug,
+                  normal.behavior.pval.threshold, 
+                  normal.behavior.slope.threshold, 
+                  drug.pval.threshold, 
+                  drug.slope.threshold,
+                  TTL
+                ))
+}
+dev.off()
+```
+
+### Global visualization : drug effects
+
+Here we plot a figure helping us visualize the effect of one drug based on the slope of its linear model across all features.
+
+```{r}
+slope_threshold <- 2e-1 # Above this threshold the color of the plot will be the most intense one
+pval_threshold <- 5e-2 # Under this threshold the size of the node will be the biggest one (if taking pvalue for size)
+rmse_threshold <- 1e-2 # Under this threshold the size of the node will be the biggest one (if taking rmse for size)
+precision <- 0. # Under this threshold the values in the dataset on which the model is built is not relevant (Slope_intensity <- 0)
+
+all.slopes.decomp <- all.slopes %>%
+                        group_by(feature, drug) %>%
+                        slice(1) %>%
+                        mutate(# Retrieving the separation : population, reagent, stimulation
+                               population = sub("^(.*?)_.*", "\\1", as.character(feature)),
+                               reagent = sub(".*?_(.*?)_.*", "\\1", as.character(feature)),
+                               stimulation = sub(".*_.*_(.*)", "\\1", as.character(feature)),
+
+                               # If the absolute value of the slope is greater than the threshold, 
+                               # the slope is replaced by the threshold (with the adequate sign)
+                               Slope = ifelse(Slope > slope_threshold, slope_threshold, Slope),
+                               Slope = ifelse(Slope < -slope_threshold, -slope_threshold, Slope),
+                               # If the pvalue is smaller than the threshold, 
+                               # the pvalue is replaced by the threshold
+                               pval = ifelse(class == "quadratic",
+                                             ifelse(quad_pval < pval_threshold, pval_threshold, quad_pval),
+                                             ifelse(lin_pval < pval_threshold, pval_threshold, lin_pval)),
+                               # log transform normalized by the threshold
+                               log_pval = log10(pval)/log10(pval_threshold),
+                               # If the rmse is smaller than the threshold, 
+                               # the rmse is replaced by the threshold
+                               RMSE = ifelse(class == "quadratic",
+                                             ifelse(quad_rmse < rmse_threshold, rmse_threshold, quad_rmse),
+                                             ifelse(lin_rmse < rmse_threshold, rmse_threshold, lin_rmse)),
+                               # log transform normalized by the threshold
+                               log_RMSE = log10(RMSE)/log10(rmse_threshold),
+                               # Slope_intensity = Slope/(max(subset data) - min(subset data)) only when the measures are significant
+                               max_val = max(Doseresponse[Doseresponse$drug == drug & Doseresponse$feature == feature,]$value),
+                               min_val = min(Doseresponse[Doseresponse$drug == drug & Doseresponse$feature == feature,]$value),
+                               Slope_intensity = ifelse(max_val - min_val < precision,
+                                                        0,
+                                                        Slope/(max_val - min_val)),
+                               
+                               # Coordinates for the plot of the reagents
+                               ## STAT first column
+                               x = ifelse(grepl("STAT", reagent), 1.5, 0),
+                               ## STAT1 (1,4)
+                               y = ifelse(reagent == "STAT1", 4, 0),
+                               ## STAT3 (1,3)
+                               y = ifelse(reagent == "STAT3", 3, y),
+                               ## STAT5 (1,2)
+                               y = ifelse(reagent == "STAT5", 2, y),
+                               ## STAT6 (1,1)
+                               y = ifelse(reagent == "STAT6", 1, y),
+                               ## NFkB (3,4)
+                               x = ifelse(reagent == "NFkB", 3, x),
+                               y = ifelse(reagent == "NFkB", 4, y),
+                               ## ERK (3,3)
+                               x = ifelse(reagent == "ERK", 3, x),
+                               y = ifelse(reagent == "ERK", 3, y),
+                               ## S6 (3,2)
+                               x = ifelse(reagent == "S6", 3, x),
+                               y = ifelse(reagent == "S6", 2, y),
+                               ## MAPKAPK2 (3,1)
+                               x = ifelse(reagent == "MAPKAPK2", 3, x),
+                               y = ifelse(reagent == "MAPKAPK2", 1, y),
+                               ## IkB (4,4)
+                               x = ifelse(reagent == "IkB", 4, x),
+                               y = ifelse(reagent == "IkB", 4, y),
+                               ## CREB (4,3)
+                               x = ifelse(reagent == "CREB", 4, x),
+                               y = ifelse(reagent == "CREB", 3, y),
+                               ## p38 (4,2)
+                               x = ifelse(reagent == "p38", 4, x),
+                               y = ifelse(reagent == "p38", 2, y))
+```
+
+Here we are doing one of the 100 plots that are going to be built for each drug so that we can plot the legend as well. Each node represent a reagent, its size is proportional to $-log_{10}(p_{val})$, its color is 
+
+```{r}
+# Example of settings for the plot
+example_drug <- "Lansoprazole"
+example_population <- "Bcells"
+example_stimulation <- "IFNa"
+
+# Subset
+df <- all.slopes.decomp[all.slopes.decomp$drug == target_drug & 
+                                   all.slopes.decomp$population == "Bcells" &
+                                   all.slopes.decomp$stimulation=="IFNa",]
+
+# Create a dummy data points to make "linear" and "quadratic" legends appear
+dummy_data_linear <- data.frame(x = 2, y = 2, log_pval = 0, Slope_intensity = 0, class = "linear")
+dummy_data_quadratic <- data.frame(x = 2, y = 2, log_pval = 0, Slope_intensity = 0, class = "quadratic")
+
+# Plot
+p <- ggplot(df, aes(x = x, y = y)) +
+  # Nodes size, border and color
+  geom_point(aes(size = log_pval, fill = Slope_intensity, color = class), shape = 21) +
+  # Name of the nodes
+  geom_text(aes(label = reagent), vjust = -1.5, hjust = 0.5, size = 5, color = "black") +
+  # Scale of the size of the nodes
+  scale_size_continuous(range = c(2, 10), limits = c(0, 1)) +
+  # Scale of the color of the nodes
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-0.3, 0.3)) +
+  # Border of the nodes
+  scale_color_manual(values = c("quadratic" = "red", "linear" = "blue"), breaks = c("linear", "quadratic")) +
+  # Legend settings (position and background)
+  theme(legend.position = "bottom", legend.box = "horizontal", legend.key = element_blank()) +
+  # Axis
+  scale_x_continuous(limits = c(0.5, 5), expand = c(0, 0)) +  # Set x-axis limits and remove expansion
+  scale_y_continuous(limits = c(0.5, 4.5), expand = c(0., 0.)) +
+  # Lables
+  labs(x = NULL, y = NULL, size = "log_pval", fill = "Slope_intensity", color = "Class")
+
+# Saving the plot
+ggsave(paste0(drug_assay_path, "/plots/legend_grid_effect_plot.png"), plot = p, width = 10, height = 8)
+```
+
+Plotting a grid composed of subplots like the one above for every population and avery stimulation and each drug
+
+```{r}
+# Useful variables (we rewrite them because the order is important for the figures)
+stimulations <- c("GMCSF", "IFNa", "IL246", "LPS", "unstim")
+populations <- c("Bcells", "CD4Tcm", "CD4Teff", "CD4Tem", "CD4Tnaive", "CD4negCD8negTcells", "CD56hiCD16negNK", "CD56loCD16posNK", "CD8Tcm", "CD8Teff", "CD8Tem", "CD8Tnaive", "Granulocytes", "MDSCs", "NKT", "Tregs", "intMCs", "mDCs", "ncMCs", "pDCs")
+Drugs <- c("Cefotaxime", "Lansoprazole", "Iopamidol", "Iohexol", "Benzylpenicillin", "Chlorthalidone", "Rifabutin", "Iodixanol", "Metformin", "Folic acid", "Clotrimazole", "Maprotiline", "Progesterone", "Pravastatin", "Methylpredonisolone")
+
+plot_drug_grid_effect <- function(target_drug){
+  plot_list <- list()
+  # Iterate over the rows and columns to create the plots
+  pop_title <- TRUE
+  for (stim in stimulations) {
+    stim_title <- TRUE
+    for (population in populations) {
+      # Filter the data for the current population and stimulation
+      subset_df <- all.slopes.decomp[all.slopes.decomp$drug == target_drug & 
+                                     all.slopes.decomp$population == population &
+                                     all.slopes.decomp$stimulation==stim,]
+      
+      # Subplot for the current population and stimulation
+      p <- ggplot(subset_df, aes(x = x/25, y = y/25)) +
+        # Nodes size, border and color
+        geom_point(aes(size = log_pval, fill = Slope_intensity, color = class), shape = 21, stroke=0.2) +
+        # Scale of the size of the nodes
+        scale_size_continuous(range = c(2, 10), limits = c(0, 1)) +
+        # Scale of the color of the nodes
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-0.3, 0.3)) +
+        # Border of the nodes
+        scale_color_manual(values = c("quadratic" = "red", "linear" = "blue"), breaks = c("linear", "quadratic")) +
+        # Removing legends and adjusting size and margins
+        theme(legend.position = "none",
+          plot.title = element_text(size = 6, margin = margin(r = 0)),
+          plot.margin = margin(0.5, 0., 0., 0.5),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.title.y = element_text(size = 6, margin = margin(r = -2)),
+          axis.text = element_text(size = 6)) +  
+        # Labels (y label only appear for the first column of subplot with the name of the stim)
+        labs(x = NULL, y = ifelse(stim_title, stim, ""), size = "log_pval", fill = "Slope_intensity", color = "Class") +
+        # Axis
+        scale_x_continuous(limits = c(0.02, 0.2), expand = c(0, 0)) +
+        scale_y_continuous(limits = c(0., 0.2), expand = c(0., 0.)) +
+        # Title (only appear for the first row of subplots with the name of the population)
+        ggtitle(ifelse(pop_title, population, "")) +
+        # Removing
+        guides(fill = "none", color = "none", size = "none")
+      
+      # Store the plot in the plot list
+      plot_list[[length(plot_list) + 1]] <- p
+      stim_title <- FALSE
+    }
+    pop_title <- FALSE
+  }
+  
+  # Creating the grid plot
+  grid_arrange <- grid.arrange(grobs = plot_list,
+                               ncol = length(populations),
+                               nrow = length(stimulations))
+  # Adding a title to the grid plot
+  title <- textGrob(target_drug, gp = gpar(fontsize = 16, fontface = "bold"))
+  layout <- rbind(c(1), c(2))
+  arranged_plots <- arrangeGrob(title, grid_arrange, layout_matrix = layout, heights = c(1, 9))
+  
+  return(arranged_plots)
+}
+
+# Creating and saving the figures in pdf files
+for (target_drug in Drugs) {
+  grid_plot <- plot_drug_grid_effect(target_drug)
+  pdf(paste(drug_assay_path, "/plots/", target_drug, "_grid_effect_plots.pdf", sep=""), width=20, height=8)
+  grid.draw(grid_plot)
+  dev.off()
+}
+
+# Creating and saving the figures in pdf files
+#pdf(paste(drug_assay_path, "/plots/grid_effect_plots.pdf", sep=""), width=20, height=8)
+#for (target_drug in Drugs) {
+#  grid.draw(plot_drug_grid_effect(target_drug))
+#}
+#dev.off()
+
+```
+
+
+
+

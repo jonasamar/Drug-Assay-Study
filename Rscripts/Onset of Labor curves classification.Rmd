@@ -1,0 +1,209 @@
+---
+title: "Onset of Labor curves classification"
+output: html_notebook
+---
+
+This is script has been taken from the original OOL Study and modified to retrieve results of interests to the drug assay study : the behavior/ trend of the features in normal pregnancy.
+
+## Paths
+
+```{r}
+setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
+funct_path <- "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv/immunome_noEGA_DOS_pen_OOL.csv"
+out_path <- "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv"
+```
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(sjstats)
+library(broom)
+library(gridExtra)
+```
+
+## Curves classification
+
+Importing the data
+
+```{r}
+data <- read.csv(funct_path)
+# removing the datapoints that are post partum
+data <- data %>% filter(DOS <= 0)
+
+# timepoints
+DOS = data$DOS
+# timepoints squared
+data$DOS2 = DOS^2
+
+# names of the immunome features
+cytof <- colnames(data)[2:(length(colnames(data))-2)]
+```
+
+**df_models :** dataframe containing the list of the immunome features with the best fitted model (either linear or quadratic).
+
+**df_sum :** dataframe containing the list of the immunome features and informations regarding the linear and quadratic models:
+- coefficients of the quadratic model (a, b)
+- pvalue of the best model
+- the AIC of linear and quadratic models
+- the class of the best model (linear or quadratic)
+- the pattern of the best model (accelerating/decelrating and increasing/decreasing)
+
+```{r}
+# Initializing the variables
+cv_lin = c()
+best = c()
+cv_both = c()
+coef_lin = c()
+coef_quad_d1 = c()
+coef_quad_d2 = c()
+class = c()
+df_models <- data.frame(feature = character(),
+                        best.model = I(list()),
+                        stringsAsFactors = FALSE)
+
+# Building linear and quadratic models
+for (feature in cytof){
+  # Subset of the data
+  data$p1 = unlist(data[feature])
+  # Linear fitting
+  fit_lin <- lm(p1 ~ DOS, data)
+  # Adding linear coefficients to coef_lin
+  coef_lin = append(coef_lin,fit_lin$coefficients[2])
+  # Adding the AIC of the linear model to cv_lin
+  cv_lin = append(cv_lin, AIC(fit_lin))
+  
+  # Quadratic fitting
+  fit_both <- lm(p1 ~ DOS + DOS2, data)
+  # Adding the AIC of the quadratic model to cv_both
+  cv_both = append(cv_both, AIC(fit_both))
+  # Adding the coefficient of DOS to coef_quad_d1
+  coef_quad_d1 = append(coef_quad_d1,fit_both$coefficients[2])
+  # Adding the coefficient of DOS^2 to coef_quad_d1
+  coef_quad_d2 = append(coef_quad_d2,fit_both$coefficients[3])
+  
+  # Adding the pvalue of the best model to best according to their AIC
+  best = append(best, ifelse(AIC(fit_both)<AIC(fit_lin), 
+                             glance(fit_both)$p.value, glance(fit_lin)$p.value))
+  # Adding the class of the best model to class according to their AIC
+  class = append(class, ifelse(AIC(fit_both)<AIC(fit_lin), 
+                             "quadratic", "linear"))
+  
+  # Adding the best model to df_models according to AIC 
+  best.model = ifelse(AIC(fit_both)<AIC(fit_lin), 
+                      fit_both, fit_lin)
+  df_models <- rbind(df_models, 
+                      data.frame(feature = feature,
+                                  model = I(list(best.model)), 
+                                  stringsAsFactors = FALSE))
+}
+
+# Creating df_sum with all the collected informations on the models
+df_sum = data.frame(cytof, 
+                    linear_fit = abs(cv_lin), 
+                    quadratic_fit = cv_both, 
+                    pval = best, 
+                    a = coef_quad_d2, 
+                    b = coef_quad_d1,
+                    class = class)
+
+# Determining the pattern of a feature based on the coefficient of the quadratic model
+pattern = c()
+for (i in 1:length(df_sum$class)){
+  if (class[i] == 'linear'){
+    pattern = append(pattern, 'linear')
+  } else {
+    if (coef_quad_d2[i]>0){
+      if ((coef_quad_d1[i]+2*coef_quad_d2[i]*(-50))>0){
+        pattern = append(pattern, 'acceleration/increase')
+      } else {
+        pattern = append(pattern, 'deceleration/decrease')
+      }
+      
+    } else {
+      if ((coef_quad_d1[i]+2*coef_quad_d2[i]*(-50))>0){
+        pattern = append(pattern, 'deceleration/increase')
+      } else {
+        pattern = append(pattern, 'acceleration/decrease')
+      }
+      } 
+  }
+}
+df_sum$pattern = pattern
+```
+
+Saving df_sum and df_models.
+
+```{r}
+write.csv(df_sum, paste0(out_path, "/pen_classification_curves_cytof.csv"))
+save(df_models, file=paste0(out_path, "/pen_model_curves_cytof.rda"))
+```
+
+## Plot of the models
+
+We are going to look at the best features according to the OOL paper
+
+```{r}
+feature_list <- c("CD56loCD16posNK_STAT1_IFNa",
+                  # Granulocytes frequency is not in our study
+                  "CD56hiCD16negNK_STAT1_IFNa",
+                  "CD4Tnaive_MAPKAPK2_IFNa",
+                  "ncMCs_CREB_GMCSF",
+                  "CD8Tcm_MAPKAPK2_unstim", 
+                  "CD8Tem_MAPKAPK2_unstim",
+                  "pDCs_STAT1_IFNa",
+                  "Bcells_MAPKAPK2_LPS",
+                  "CD4Tem_MAPKAPK2_unstim",
+                  "CD8Tcm_MAPKAPK2_IFNa", 
+                  "CD8Tem_MAPKAPK2_IFNa",
+                  # Bcells freq is not in our study
+                  "CD4Tem_NFkB_IL246",
+                  "CD4Tcm_IkB_unstim",
+                  "mDCs_STAT6_IFNa", 
+                  "pDCs_STAT6_IFNa",
+                  "mDCs_MAPKAPK2_unstim", 
+                  "pDCs_MAPKAPK2_unstim")
+```
+
+Plot
+
+```{r}
+plots <- list()
+i <- 0
+for (target_feature in feature_list) {
+  coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
+  
+  # building the predictions
+  y <- data[, target_feature]
+  intercept <- coefs[['(Intercept)']]
+  if (length(coefs) == 3){ # quadratic model
+    a <- coefs[['DOS2']]
+    b <- coefs[['DOS']]
+    y_pred <- intercept + b * DOS + a * DOS^2
+  }
+  else{ # length(coefs) == 2, linear model
+    slope <- coefs[['DOS']]
+    y_pred <- intercept + slope * DOS
+  }
+  
+  df <- data.frame(x = DOS, y = y, y_pred = y_pred)
+  pval <- df_sum[df_sum$cytof == target_feature,]$pval
+    
+  # Plot
+  plot <- ggplot(df, aes(x = x, y = y)) +
+      geom_point(color = "blue", size = 1, na.rm = TRUE) +
+      geom_line(aes(y = y_pred), color = "red") +
+      ggtitle(paste(target_feature, pval, sep=",\np = ")) +
+      xlab(NULL) +  # Remove x-axis label
+      ylab(NULL) +  # Remove y-axis label
+      theme(plot.title = element_text(size = 6))
+    
+  plots[[target_feature]] <- plot
+}
+
+# Saving the plots
+pdf(paste0(out_path, "/best_features_plot_OOL.pdf"))
+grid.arrange(grobs = plots[1:16], nrow = 4, ncol = 4)
+grid.arrange(grobs = plots[17:17], nrow = 4, ncol = 4)
+dev.off()
+```

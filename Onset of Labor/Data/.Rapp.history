@@ -1,0 +1,9 @@
+load("/Users/jonasamar/Stabl/Onset of Labor/Data/Data.rda")
+DOS
+write.csv(DOS, "DOS.csv")
+load("/Users/jonasamar/Stabl/Onset of Labor/Data/Data.rda")
+ls()
+EGA
+write.csv(EGA, './Users/jonasamar/Stabl/Onset of Labor/Data/EGA_data_model.csv')
+write.csv(EGA, '/Users/jonasamar/Stabl/Onset of Labor/Data/EGA_data_model.csv')
+q()

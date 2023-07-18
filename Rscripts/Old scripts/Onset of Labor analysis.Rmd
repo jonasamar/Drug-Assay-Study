@@ -1,0 +1,287 @@
+---
+title: "Onset of Labor analysis drug assay"
+output: html_document
+date: '2023-01-31'
+---
+```{r setup, include=FALSE}
+#setwd("/Users/jeinhaus/Library/Mobile Documents/com~apple~CloudDocs/Documents/Stanford PostDoc/05 Drug Assay Preterm #Birth/R analysis")
+#funct_path = "/Users/jeinhaus/Library/Mobile Documents/com~apple~CloudDocs/Documents/Stanford PostDoc/05 Drug Assay #Preterm Birth/R analysis/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv"
+#out_path = "/Users/jeinhaus/Library/Mobile Documents/com~apple~CloudDocs/Documents/Stanford PostDoc/05 Drug Assay #Preterm Birth/R analysis"
+
+setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
+funct_path = "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv"
+out_path = "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv"
+```
+
+## Libraries
+
+```{r}
+library(tidyselect)
+library(reshape2)
+library(dplyr)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+library(paletteer)
+library(readxl)
+library(tidyr)
+```
+
+## Restructuring the Data
+
+```{r}
+MyData = read.csv(funct_path)
+head(MyData)
+```
+
+```{r}
+MyData= MyData %>% 
+  rename("stimulation" = "Stims") %>%
+  mutate(reagent = sub("^[^_]*_", "", reagent)) %>%
+  mutate(ID = paste0("P",ID, "_", GA)) %>% # Creating a new index ID
+  filter(ID != "Pinternalcontrol_na") %>%
+  select(-c(EGA, GA))
+
+MyData$ID = as.character(MyData$ID)
+```
+
+## Preprocessing of the features
+
+Here use the asinh transform on the cytometry data and build a feature that is actually the difference between stimulated and un-stimulated samples 
+
+```{r}
+final_data = c()
+fil = c("population","reagent","ID")
+
+for(timepoint in unique(MyData$ID)){
+  
+  MyData_timepoint = MyData %>% 
+    filter(ID == timepoint)
+  
+  stims = unique(MyData_timepoint$stimulation) 
+  
+  MyData_timepoint = MyData_timepoint %>% 
+    mutate(feature = asinh(median/5)) %>%
+    select(-DOS)
+    
+  MyData_timepoint = MyData_timepoint %>%
+    select(-c("median")) %>%
+    pivot_wider(names_from = stimulation, values_from = feature)
+  
+  for (stim in stims){
+    if (stim!="unstim"){
+      MyData_timepoint[stim] = MyData_timepoint[stim] - MyData_timepoint["unstim"]
+    }
+  }
+  
+  MyData_fin = MyData_timepoint %>%
+    pivot_longer(-all_of(fil), names_to="stimulation",values_to="feature")
+  
+  final_data = rbind(final_data, MyData_fin)
+}
+```
+
+```{r}
+write.csv(final_data, paste(out_path, "regated_preprocessed_OOL.csv", sep = "/"), row.names=FALSE)
+```
+
+Here we create a file to use the R script for curve classification from the OOL Study : we need the dataframe to have the DOS information and the features as columns.
+
+## Creating data files
+
+### Unpenalized data
+
+```{r}
+x = final_data[!grepl("pp", final_data$ID),] %>% #removing pp ID which correspond to post partum data
+  dcast(ID ~ population + reagent + stimulation, value.var = "feature")
+
+TTL = read.csv(funct_path)
+TTL = TTL %>% 
+  rename("stimulation" = "Stims") %>% 
+  dplyr::mutate(ID = paste0("P",ID, "_", GA)) %>% # Creating a new index ID
+  filter(ID != "Pinternalcontrol_na") %>%
+  select(c(EGA, DOS, ID)) %>%
+  filter(!grepl("pp", ID)) %>% 
+  group_by(ID) %>% 
+  filter(row_number()==1) %>%
+  mutate(DOS = as.numeric(DOS)) %>%
+  mutate(EGA = as.numeric(EGA))
+```
+
+```{r}
+# Dataset with NO Estimator of EGA
+im_noEGA = x
+
+# Dataset with NO Estimator of EGA and DOS
+im_noEGA_DOS = merge(x, select(TTL, "DOS"), by = "ID")
+
+# Dataset with Estimator of EGA
+im_EGA = merge(x, select(TTL, "EGA"), by = "ID")
+```
+
+Creating the csv files.
+
+```{r}
+write.csv(im_noEGA, paste(out_path, "immunome_noEGA_OOL.csv", sep = "/"), row.names=FALSE)
+write.csv(im_EGA, paste(out_path, "immunome_EGA_OOL.csv", sep = "/"), row.names=FALSE)
+```
+
+Creating the csv file for the outcomes
+
+```{r}
+DOS = subset(TTL, select = c(ID, DOS))
+EGA = subset(TTL, select = c(EGA, ID))
+
+# Building a first estimate of time (nb of hours) to labor based on EGA : 24*(DOS - 7*(EGA - 40))
+EGA_error = merge(DOS, EGA, by="ID") %>%
+            mutate(error = round(24*(DOS - 7*(EGA-40)))) %>%
+            select(c("ID", "error"))
+
+write.csv(DOS, paste(out_path, "outcome_OOL.csv", sep = "/"), row.names=FALSE)
+write.csv(EGA_error, paste(out_path, "EGA_error.csv", sep = "/"), row.names=FALSE)
+```
+
+### Penalized Data
+
+```{r}
+penalization_preprocessing <- function(penlization_matrix, name){
+  penlization_matrix <- penlization_matrix %>%
+  `colnames<-`(c("population", colnames(penlization_matrix)[-1])) %>%
+  mutate(population = as.factor(population)) %>%
+  gather("protein", "penalization", -population) %>% 
+  mutate(feature = paste0(population, "_",protein, paste("_",name, sep=""))) %>% 
+  filter(penalization == 0) %>%
+  mutate(feature = sub("_[^_]*_", "_", feature))
+}
+```
+
+Getting the features to remove due to penalization
+
+```{r}
+#path_to_file = "/Users/jeinhaus/Library/Mobile Documents/com~apple~CloudDocs/Documents/Stanford PostDoc/05 Drug   #Assay Preterm #Birth/R analysis/penalization matrix drug assay.xlsx"
+
+path_to_file = "/Users/jonasamar/Stabl/Drug Study/Drug assay csv/penalization matrix drug assay.xlsx"
+stims = c("IFNa","LPS","IL246","GMCSF")
+discard = c()
+
+for (stim in stims){
+  new_penalization = penalization_preprocessing(read_xlsx(path_to_file, sheet = stim)[1:12], stim)
+  discard <- c(discard, new_penalization$feature)
+}
+```
+
+Creating the data files with penalization
+
+```{r}
+im_noEGA_pen  <- select(im_noEGA, -one_of(discard))
+im_noEGA_DOS_pen  <- select(im_noEGA_DOS, -one_of(discard))
+im_EGA_pen  <- select(im_EGA, -one_of(discard))
+```
+
+```{r}
+write.csv(im_noEGA_pen, paste(out_path, "immunome_noEGA_pen_OOL.csv", sep = "/"), row.names=FALSE)
+write.csv(im_noEGA_DOS_pen, paste(out_path, "immunome_noEGA_DOS_pen_OOL.csv", sep = "/"), row.names=FALSE)
+write.csv(im_EGA_pen, paste(out_path, "immunome_EGA_pen_OOL.csv", sep = "/"), row.names=FALSE)
+```
+
+## Reconstruction of the features linear or quadratic fit (from OOL)
+
+We first load the best fitted models and the data from the article
+
+```{r}
+load(paste(out_path, "OOL paper data/curves_cytof.rda", sep = "/"))
+curve.classification <- read.csv(paste(out_path, "OOL paper data/classification_curves_cytof.csv", sep = "/"))
+OOL_data <- read.csv(file=paste(out_path, "OOL paper data/Onset of Labor CyTOF.csv", sep="/"), sep=",")
+```
+
+These are the top 15 CyTOF features from the article
+
+```{r}
+OOL.top.immunome.features <- c("CD69negCD56loCD16negNK_STAT1_IFNa", #typo in article
+                               "Granulocytes",
+                               "CD69posCD56loCD16negNK_STAT1_IFNa", #typo in article
+                               "CD62LposCD4Tnaive_MAPKAPK2_IFNa",
+                               "ncMCs_CREB_GMCSF",
+                               "CD69posCD8Tmem_MAPKAPK2_unstim",
+                               "pDCs_STAT1_IFNa",
+                               "Bcells_MAPKAPK2_LPS",
+                               "CD4Tem_MAPKAPK2_unstim",
+                               "CD69posCD8Tmem_MAPKAPK2_IFNa",
+                               "Bcells",
+                               "CCR5posCCR2posCD4Tem_NFkB_IL246",
+                               "CCR5posCCR2posCD4Tcm_IkB_unstim",
+                               "DCs_STAT6_IFNa",
+                               "DCs_MAPKAPK2_unstim")
+```
+
+Plot models and data points
+
+```{r}
+DOS <- OOL_data$DOS
+plots <- list()
+
+for (target_feature in OOL.top.immunome.features){
+  # getting the coefs and class of the model
+  coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
+
+  # building the predictions
+  y <- OOL_data[, target_feature]
+  intercept <- coefs[['(Intercept)']]
+  if (length(coefs) == 3){ # quadratic model
+
+    a <- coefs[['DOS2']]
+    b <- coefs[['DOS']]
+    y_pred <- intercept + b * DOS + a * DOS^2
+  }
+  else{ # length(coefs) == 2, linear model
+    slope <- coefs[['DOS']]
+    y_pred <- intercept + slope * DOS
+  }
+
+  df <- data.frame(x = DOS, y = y, y_pred = y_pred)
+  pval <- curve.classification[curve.classification$cytof == target_feature,]$pval
+  
+  # Plot
+  plot <- ggplot(df, aes(x = x, y = y)) +
+    geom_point(color = "blue", size = 1) +
+    geom_line(aes(y = y_pred), color = "red") +
+    ggtitle(paste(target_feature, pval, sep=",\np = ")) +
+    xlab(NULL) +  # Remove x-axis label
+    ylab(NULL) +  # Remove y-axis label
+    theme(plot.title = element_text(size = 6))
+  
+  plots[[target_feature]] <- plot
+}
+
+pdf("OOL immunome plots.pdf")
+grid.arrange(grobs = plots, nrow = 4, ncol = 4)
+dev.off()
+```
+
+## Features selected by STABL : analysis
+
+```{r}
+#featuretable <- read.csv("/Users/jeinhaus/Downloads/Results Reanalysis_OOL_for_PTB_assay_without_EGA[22]/Multivariate #Results/immunome_noEGA_pen_OOL/STABL_selection_Reanalysis_OOL_for_PTB_assay_without_EGA_immunome_noEGA_pen_OOL/Max STABL #scores.csv")
+
+featuretable <- read.csv("/Users/jonasamar/Stabl/Drug Study/Results Reanalysis_OOL_for_PTB_assay_without_EGA/Multivariate Results/immunome_noEGA_pen_OOL/STABL_selection_Reanalysis_OOL_for_PTB_assay_without_EGA_immunome_noEGA_pen_OOL/Max STABL scores.csv")
+
+modelfeatures <- featuretable %>%
+                    `colnames<-`(c("feature", colnames(featuretable)[-1])) %>%
+                    slice(1:18) %>%
+                    select(c("feature")) %>%
+                    unlist()
+
+model0_2 <- im_noEGA %>% 
+              select(modelfeatures) %>% 
+              mutate(DOS = TTL$DOS)
+
+colnames(model0_2)[1:length(modelfeatures)] <- modelfeatures
+
+#lm0_2 = lm(DOS~model0_2[1:18], data = model0_2) #Create the linear regression
+lm0_2 <- lm(DOS~ ., data = model0_2)
+
+summary(lm0_2) #Review the results
+```
+
+
+

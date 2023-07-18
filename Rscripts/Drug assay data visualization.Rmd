@@ -1,0 +1,205 @@
+---
+title: "Drug assay data visualization"
+output: html_notebook
+---
+
+Here we want to visualize how the data is distributed across the patients on each feature for every dose so that we can see how relevant it is to take into account all the data points that we have. We want to conclude on relevant model to fit and a relevant scale transformation to apply.
+
+## Paths
+
+```{r}
+setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
+OOL_path <- "/Users/jonasamar/Stabl/Drug Study/Onset of Labor csv"
+drug_assay_path <- "/Users/jonasamar/Stabl/Drug Study/Drug assay csv"
+```
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(tidyselect)
+library(reshape2)
+library(dplyr)
+library(viridis)
+library(tidyr)
+library(janitor)
+library(utils)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+```
+
+## Importing and restructuring data
+
+Importing preprocessed penalized data
+
+```{r}
+pen_final_data <- read.csv(paste0(drug_assay_path, "/preprocessed_pen.csv")) %>%
+                  # Removing the asinh transform of unstim_0
+                  filter(dose >= 0)
+```
+
+```{r}
+AllPenDoseresponse <- pen_final_data %>%
+    # Adding a D in front of the dose value
+    mutate(dose = paste0("D", dose)) %>%
+    dcast(ID + population + reagent + drug + stimulation ~ dose, value.var = "feature") %>%
+    # feature = population_reagent_stimulation
+    mutate(feature=paste0(population, "_", reagent, "_", stimulation)) %>% 
+    pivot_longer(cols = c("D0", "D1", "D10", "D100", "D1000")) %>%
+    rename("dose" = "name") %>%
+    select(c("ID", "feature", "drug", "dose", "value")) %>%
+    na.omit()
+
+head(AllPenDoseresponse)
+```
+```{r}
+save(AllPenDoseresponse, file=paste0(drug_assay_path, "/all pen dose response.rda"))
+```
+
+## Visualizing data distributions
+
+Here we visualize the data for each dose individually.
+
+```{r}
+# Function that create a grid with the plots of boxplots of the features for every drug for a specific target dose
+# The point of this plot is to see if the values of the features are significantly similar enough to justify the construction of a model
+
+top_n_var_features_boxplot_grid <-function(target_dose, n){
+  # Subset the data for dose=="D0"
+  subset_data <- AllPenDoseresponse %>% filter(dose == target_dose)
+  
+  # Create an empty list to store the boxplot plots
+  boxplot_plots <- list()
+  
+  # Iterate over each drug
+  for (target_drug in unique(subset_data$drug)) {
+    # Subset the data for the current drug
+    drug_data <- subset_data %>% filter(drug == target_drug)
+    
+    # Compute the variance for each feature
+    variances <- drug_data %>%
+                  group_by(feature) %>%
+                  summarize(variance = var(value)) %>%
+                  arrange(desc(variance))
+    
+    # Select the top n features with the biggest variances
+    top_features <- head(variances$feature, n)
+    
+    # Subset the data for the top features
+    top_data <- drug_data %>% 
+                  filter(feature %in% top_features) %>%
+                  mutate(ID = as.factor(ID)) 
+    
+    ordered_features <- top_data %>%
+                          group_by(feature) %>%
+                          summarize(median_value = median(value, na.rm = TRUE)) %>%
+                          arrange(desc(median_value)) %>%
+                          pull(feature)
+  
+    # Convert feature to factor with the desired order
+    top_data$feature <- factor(top_data$feature, levels = ordered_features)
+    
+    # Create a boxplot plot for the current drug
+    p <- ggplot(top_data, mapping = aes(x = feature, y = value)) +
+      geom_boxplot() +
+      geom_point(na.rm = T, alpha = 0.5, aes(color = ID)) +
+      labs(title = target_drug) +
+      theme(plot.title = element_text(size = 12, margin = margin(r = 5)),
+            axis.text.x = element_text(size = 4, angle = 30),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+    
+    # Store the boxplot plot in the list
+    boxplot_plots[[target_drug]] <- p
+  }
+  
+  # Save the grid of boxplots as a PDF file
+  pdf(paste(drug_assay_path, "/plots/", target_dose, "_top", n, "variances_feature_boxplot_grid.pdf", sep=""), 
+      width = 15, height = 8)
+  for (i in 0:4){
+    grid.draw(grid.arrange(grobs=boxplot_plots[(3*i+1):(3*i+3)], nrow=3, ncol = 1))
+  }
+  dev.off()
+}
+```
+
+```{r}
+###### WARNING THIS CELL TAKES 15-20min TO RUN ! ###### 
+
+target_doses <- c("D0", "D1", "D10", "D100", "D1000")
+n <- 100
+
+for (target_dose in target_doses){
+  top_n_var_features_boxplot_grid(target_dose, n)
+}
+```
+
+Here we visualize the data for each features individually.
+
+```{r}
+###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ###### 
+
+# Function creating one plot
+plot_feature_drug_boxplot <- function(target_feature, target_drug){
+  subset <- AllPenDoseresponse %>%
+              filter(feature == target_feature,
+                     drug == target_drug) %>%
+              mutate(ID = as.factor(ID))
+  
+  p <- ggplot(subset, mapping = aes(x = dose, y = value)) +
+      geom_boxplot() +
+      geom_point(na.rm = T, alpha = 0.5, aes(color = ID)) +
+      geom_line(aes(group = ID, color = ID), size=1.5) +
+      xlab(target_feature) +
+      ylab(target_drug)
+  
+  return(p)
+}
+
+# Creating a list containing all the plots
+list_plots <- list()
+for (target_feature in unique(AllPenDoseresponse$feature)){
+  for (target_drug in unique(AllPenDoseresponse$drug)){
+    list_plots[[length(list_plots)+1]] <- plot_feature_drug_boxplot(target_feature, target_drug)
+  }
+}
+
+# Save the grid of boxplots as a PDF file
+pdf(paste0(drug_assay_path, "/plots/drug_feature_boxplot_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+```
+
+## Scale transforms
+
+Here we transform the doses into actual values (0, 1, 10, 100, 1000) and then we transform these values on different scales that are we are going to try building models on.
+The visualization of the data also helped us see that the trend of the medians was also interesting to look at.
+
+```{r}
+AllPenDoseresponse <- AllPenDoseresponse %>%
+                        mutate(dose = as.numeric(sub("^D", "", dose)),
+                               # Log10 transform (0 are set to NA)
+                               log10_dose = log10(dose),
+                               # Log10(x + 1) transform
+                               log10_1_dose = log10(dose +1),
+                               # Pseudo log transform
+                               pseudo_log_dose = asinh(dose/2)/log(10))
+
+MedianDoseresponse <- AllPenDoseresponse %>%
+                        group_by(dose, drug, feature) %>%
+                        mutate(median_value = median(value, na.rm = TRUE)) %>%
+                        select(-c(ID, value)) %>%
+                        distinct()
+```
+
+Saving the datasets with all the scales
+
+```{r}
+save(AllPenDoseresponse, file=paste0(drug_assay_path, "/all pen dose response with scales.rda"))
+save(MedianDoseresponse, file=paste0(drug_assay_path, "/median pen dose response with scales.rda"))
+```
+
+

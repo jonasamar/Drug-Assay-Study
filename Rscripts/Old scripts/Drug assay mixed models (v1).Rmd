@@ -1,0 +1,231 @@
+---
+title: "Drug assay mixed models"
+output: html_notebook
+---
+
+Here we want to quantify the effect of the drugs on each feature. To do that, we decided to build mixed linear models on the whole data (4 patients) for each drug and each feature. We then analyzed the results of these models by calculating scores of performances and visualize the best models according to these score to see if this choice of modeling is relevant. 
+
+## Paths
+
+```{r}
+setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
+funct_path="/Users/jonasamar/Stabl/Drug Study/Drug assay csv/Drug assay ID1-4re-normalized&barcorded - Statistics - ID2P3 removed.csv"
+out_path="/Users/jonasamar/Stabl/Drug Study/Drug assay csv"
+```
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(tidyselect)
+library(reshape2)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(r2glmm)
+library(sjstats)
+```
+
+## Linear mixed models
+
+Importing penalized preprocessed data.
+
+```{r}
+final_data <- read.csv(paste0(out_path, "/preprocessed_pen.csv"))
+```
+
+
+**Doseresponse :** reconfiguration of the data so that we can build mixed models.
+
+**mixed.model :** dataframe containing the name of the feature, name of the drug and the associated mixed model.
+
+**all.slopes :** dataframe containing all the names of the feature, name of the drug and the slope of the mixed model.
+
+```{r}
+Doseresponse = final_data %>%
+                dplyr::mutate(dose = paste0("D", dose)) %>% # adds a D in front of the dose value
+                dcast(ID + population + reagent + drug + stimulation ~ dose, value.var = "feature") %>% 
+                dplyr::select(-D0) %>% # removing D0 (DMSO = no drug)
+                mutate(feature=paste0(population, "_", reagent, "_", stimulation)) %>% # feature = population_reagent_stimulation
+                pivot_longer(starts_with("D1")) %>%
+                rename("dose" = "name") %>%
+                select(c("ID", "feature", "drug", "dose", "value")) %>%
+                na.omit() %>%
+                mutate(dose = log(as.integer(gsub("\\D", "", dose)), base=10), # log transform of the scale
+                       drug = factor(drug),
+                       feature = factor(feature),
+                       ID = factor(ID))
+
+mixed.model <- data.frame(feature = character(),
+                          drug = character(),
+                          model = I(list()), 
+                          stringsAsFactors = FALSE)
+
+all.slopes <- data.frame(feature = character(),
+                         drug = character(),
+                         ID = numeric(),
+                         slope = numeric(),
+                         stringsAsFactors = FALSE)
+```
+
+Building the mixed models
+
+```{r}
+# progress bar
+pb <- txtProgressBar(min = 0, max = length(unique(Doseresponse$feature)), style = 3)
+i <- 0
+
+for (feature.name in unique(Doseresponse$feature)){
+  # progress bar
+  setTxtProgressBar(pb, i)
+  
+  # we look at each drug for a given feature
+  for (drug.name in unique(Doseresponse$drug)){
+    
+    # subset of the dataset 
+    subset <- Doseresponse %>% 
+                filter(feature == !!feature.name) %>%
+                filter(drug == !!drug.name) %>%
+                select(c("ID", "dose", "value"))
+    # building a mixed model only when the response is not constant (we get an error message otherwise...)
+    if (length(unique(subset$value)) > 1){
+      model <- suppressMessages(list(lmer(value ~ dose + (1 | ID), data = subset)))
+      model_coefs <- coef(model[[1]])$ID %>% 
+                      rename(Intercept = `(Intercept)`, Slope = dose) %>% 
+                      rownames_to_column("ID")
+      
+      # Adding the slope of the new mixed model to all.slopes
+      all.slopes <- rbind(all.slopes, 
+                          data.frame(feature = feature.name, 
+                                     drug = drug.name, 
+                                     ID = model_coefs["ID"], 
+                                     slope = model_coefs["Slope"]))
+    }
+    else{
+      # when there is only one value, the model is constant
+      model <- list(unique(subset$value))
+    }
+    # Adding new mixed model to mixed.model
+    mixed.model <- rbind(mixed.model, 
+                       data.frame(feature = feature.name,
+                                  drug = drug.name,
+                                  model = I(model), 
+                                  stringsAsFactors = FALSE))
+
+    
+  }
+  # incremental for progress bar
+  i <- i+1
+}
+```
+
+Saving mixed.models, all.slopes and Doseresponse.
+
+```{r}
+save(mixed.model, file=paste0(out_path, "/mixed models.rda"))
+save(all.slopes, file=paste0(out_path, "/mixed models slopes.rda"))
+save(Doseresponse, file=paste0(out_path, "/dose response.rda"))
+```
+
+**Why not including D0 to the training of the model ?** After fitting and visualization of the models on the data with D0, it seemed that the coefficients of the mixed models were driven by outlier values coming from patient 1 for D0 which were extremely low compared to the others.
+
+## Mixed models analysis
+
+To see which models are the best fit, we decided to rank them based on different scores which are all going to be store in the variable **model.scores**.
+
+```{r}
+model.scores <- data.frame(feature = character(),
+                            drug = character(),
+                            pval = numeric(),
+                            RMSE = numeric(),
+                            stringsAsFactors = FALSE)
+```
+
+Building model.scores
+
+```{r}
+# Progress bar
+pb <- txtProgressBar(min = 0, max = length(unique(Doseresponse$feature)), style = 3)
+i <- 0
+
+# Going across all combinations of feature x drug
+for (feature.name in unique(Doseresponse$feature)){
+  # Progress bar
+  setTxtProgressBar(pb, i)
+  
+  for (drug.name in unique(Doseresponse$drug)){
+    # Calculating RMSE and p-value
+    target_model <- mixed.model$model[mixed.model$feature == feature.name & mixed.model$drug == drug.name][[1]]
+    if (inherits(target_model, "lmerMod")){ # the scores are only calculated when the models were built (removing constant models)
+      residuals <- residuals(target_model)
+      rmse <- sqrt(mean(residuals^2))
+      p_value <- summary(target_model)$coefficients[, "Pr(>|t|)"][["dose"]]
+      # Adding the rmse to the model.scores dataframe
+      model.scores <- rbind(model.scores, 
+                            data.frame(feature = feature.name,
+                                        drug = drug.name,
+                                        pval = p_value,
+                                        RMSE = rmse, 
+                                        stringsAsFactors = FALSE))
+    }
+  }
+  # Incremental for progress bar
+  i <- i+1
+}
+
+# Adding the slope, the absolute value of the slope and the score -log10(pval)*|slope|
+model.scores <- left_join(model.scores, all.slopes, by=c("feature", "drug")) %>%
+                    mutate(abs.Slope=abs(Slope)) %>%
+                    select(feature, drug, RMSE, pval, Slope, abs.Slope) %>%
+                    mutate(score = -log(pval, base=10)*abs.Slope) %>%
+                    distinct(feature, drug, RMSE, abs.Slope, score, .keep_all = TRUE) %>%
+                    arrange(desc(score))
+```
+
+Saving model.scores
+
+```{r}
+save(model.scores, file=paste0(out_path, "/mixed model scores.rda"))
+```
+
+## Visualization
+
+Plotting the best models according to model.scores
+
+```{r}
+head(model.scores)
+```
+
+```{r}
+# Selecting a specific model
+target_feature <- "mDCs_NFkB_IL246"
+target_drug <- "Rifabutin"
+target_model <- mixed.model$model[mixed.model$feature == target_feature & mixed.model$drug == target_drug][[1]]
+
+# Coefficients of the selected model
+model_coefs <- coef(target_model)$ID %>% 
+                  rename(Intercept = `(Intercept)`, Slope = dose) %>% 
+                  rownames_to_column("ID")
+
+# Subset of the data for the chosen feature and drug
+data <- Doseresponse %>% 
+            filter(feature == !!target_feature) %>%
+            filter(drug == !!target_drug) %>%
+            select(ID, dose, value)
+
+data_rani <- left_join(data, model_coefs, by = "ID")
+
+# Plot
+suppressWarnings(ggplot(data = data_rani, 
+                        mapping = aes(x = dose, 
+                                      y = value, 
+                                      colour = ID)) +
+                   geom_point(na.rm = T, alpha = 0.5) +
+                   geom_abline(aes(intercept = Intercept, 
+                                   slope = Slope,
+                                   colour = ID),
+                               size = 1.5) +
+                   theme(legend.position = "top"))
+```
+
+**Conclusion :** The best models seem to fit the data very well. We will always be able to come back to this R script for improvements (with quadratic models for instance). We can continue our analysis being confident that the slopes of these mixed models are good estimators of the effect of the drugs on the features.

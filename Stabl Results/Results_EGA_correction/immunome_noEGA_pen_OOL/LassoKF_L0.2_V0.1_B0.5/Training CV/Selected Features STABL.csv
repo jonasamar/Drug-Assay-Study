@@ -1,0 +1,51 @@
+,Fold selected features,Fold nb of features
+Fold 0,[],0
+Fold 1,"['Granulocytes_153Eu_STAT1_IFNa', 'NKT_168Er_STAT6_unstim', 'pDCs_155Gd_S6_IL246']",3
+Fold 2,[],0
+Fold 3,"['CD4negCD8negTcells_154Sm_STAT3_IL246', 'CD4Tnaive_154Sm_STAT3_unstim', 'CD56loCD16posNK_154Sm_STAT3_IL246', 'Granulocytes_154Sm_STAT3_GMCSF', 'ncMCs_154Sm_STAT3_unstim', 'NKT_168Er_STAT6_unstim', 'pDCs_154Sm_STAT3_GMCSF']",7
+Fold 4,[],0
+Fold 5,[],0
+Fold 6,"['CD4negCD8negTcells_154Sm_STAT3_IL246', 'CD4negCD8negTcells_166Er_NFkB_unstim', 'CD4negCD8negTcells_168Er_STAT6_unstim', 'CD4Teff_153Eu_STAT1_IL246', 'CD4Tnaive_154Sm_STAT3_unstim', 'CD56hiCD16negNK_159Tb_MAPKAPK2_IL246', 'CD56hiCD16negNK_166Er_NFkB_IL246', 'CD56loCD16posNK_154Sm_STAT3_IL246', 'CD8Tcm_154Sm_STAT3_IL246', 'CD8Tcm_166Er_NFkB_unstim', 'Granulocytes_150Nd_STAT5_IFNa', 'Granulocytes_150Nd_STAT5_IL246', 'Granulocytes_153Eu_STAT1_IFNa', 'Granulocytes_154Sm_STAT3_GMCSF', 'Granulocytes_159Tb_MAPKAPK2_GMCSF', 'MDSCs_154Sm_STAT3_GMCSF', 'ncMCs_154Sm_STAT3_unstim', 'ncMCs_155Gd_S6_unstim', 'NKT_168Er_STAT6_unstim', 'pDCs_150Nd_STAT5_IL246', 'pDCs_150Nd_STAT5_unstim', 'pDCs_154Sm_STAT3_GMCSF', 'pDCs_155Gd_S6_GMCSF', 'pDCs_155Gd_S6_IFNa', 'pDCs_155Gd_S6_IL246', 'pDCs_159Tb_MAPKAPK2_GMCSF']",26
+Fold 7,[],0
+Fold 8,[],0
+Fold 9,"['CD8Tem_166Er_NFkB_unstim', 'Granulocytes_159Tb_MAPKAPK2_GMCSF', 'ncMCs_155Gd_S6_GMCSF', 'ncMCs_168Er_STAT6_IFNa', 'NKT_168Er_STAT6_unstim', 'pDCs_153Eu_STAT1_IL246']",6
+Fold 10,[],0
+Fold 11,[],0
+Fold 12,[],0
+Fold 13,['ncMCs_154Sm_STAT3_unstim'],1
+Fold 14,[],0
+Fold 15,[],0
+Fold 16,[],0
+Fold 17,[],0
+Fold 18,[],0
+Fold 19,[],0
+Fold 20,[],0
+Fold 21,[],0
+Fold 22,['ncMCs_154Sm_STAT3_unstim'],1
+Fold 23,[],0
+Fold 24,[],0
+Fold 25,[],0
+Fold 26,[],0
+Fold 27,[],0
+Fold 28,[],0
+Fold 29,[],0
+Fold 30,[],0
+Fold 31,[],0
+Fold 32,[],0
+Fold 33,[],0
+Fold 34,[],0
+Fold 35,[],0
+Fold 36,[],0
+Fold 37,[],0
+Fold 38,"['CD4negCD8negTcells_154Sm_STAT3_IL246', 'CD4negCD8negTcells_166Er_NFkB_unstim', 'CD4Tnaive_150Nd_STAT5_IL246', 'CD4Tnaive_154Sm_STAT3_unstim', 'CD56hiCD16negNK_149Sm_CREB_IL246', 'CD56loCD16posNK_154Sm_STAT3_IL246', 'CD8Tcm_154Sm_STAT3_IL246', 'Granulocytes_150Nd_STAT5_IFNa', 'Granulocytes_150Nd_STAT5_IL246', 'Granulocytes_153Eu_STAT1_IFNa', 'Granulocytes_154Sm_STAT3_GMCSF', 'Granulocytes_159Tb_MAPKAPK2_GMCSF', 'MDSCs_154Sm_STAT3_GMCSF', 'ncMCs_155Gd_S6_unstim', 'ncMCs_167Er_ERK_LPS', 'NKT_168Er_STAT6_unstim', 'pDCs_150Nd_STAT5_IL246', 'pDCs_150Nd_STAT5_unstim', 'pDCs_154Sm_STAT3_GMCSF', 'pDCs_155Gd_S6_IL246']",20
+Fold 39,[],0
+Fold 40,[],0
+Fold 41,[],0
+Fold 42,[],0
+Fold 43,[],0
+Fold 44,[],0
+Fold 45,[],0
+Fold 46,[],0
+Fold 47,"['CD4negCD8negTcells_166Er_NFkB_unstim', 'CD56loCD16posNK_154Sm_STAT3_IL246', 'ncMCs_154Sm_STAT3_unstim']",3
+Fold 48,[],0
+Fold 49,[],0

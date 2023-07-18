@@ -1,0 +1,188 @@
+---
+title: "Drug assay preprocessing"
+output: html_notebook
+---
+
+## Paths
+
+```{r}
+setwd("/Users/jonasamar/Stabl/Drug Study/Rscripts")
+funct_path="/Users/jonasamar/Stabl/Drug Study/Drug assay csv/Drug assay ID1-4re-normalized&barcorded - Statistics - ID2P3 removed.csv"
+out_path="/Users/jonasamar/Stabl/Drug Study/Drug assay csv"
+path_to_penalization_file = paste0(out_path, "/penalization matrix drug assay.xlsx")
+```
+
+## Libraries
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(readxl)
+```
+
+## Restructuring of data
+
+Importing the data.
+
+```{r}
+MyData = read.csv(funct_path)
+head(MyData)
+```
+
+Removing redundant information (channel/reagent, uniquePopulationName/population) and useless columns (filename, parentPopulation).
+
+```{r}
+MyData = subset(MyData, select = -c(filename, uniquePopulationName, parentPopulation, channel))
+```
+
+Rewriting the Drug used on each Plate.
+
+```{r}
+#This vector contains the name of the drugs in the order corresponding to the plate number they were tested
+Drugs <- c( 
+  "Cefotaxime",
+  "Lansoprazole",
+  "Iopamidol",
+  "Iohexol",
+  "Benzylpenicillin",
+  "Chlorthalidone",
+  "Rifabutin",
+  "Iodixanol",
+  "Metformin",
+  "Folic acid",
+  "Clotrimazole",
+  "Maprotiline",
+  "Progesterone",
+  "Pravastatin",
+  "Methylpredonisolone"
+)
+
+# We associate the name of the drug corresponding to its plate number in MyData
+for (i in seq(1, 15)){
+    MyData = MyData %>%
+    mutate(Drug =  ifelse(Plate == i, Drugs[i], Drug))
+}
+
+# Removing the Plate column
+MyData = subset(MyData, select = -c(Plate)) 
+```
+
+Getting rid of the units for the doses and associating 0.5% to the null dose (it corresponds DMSO).
+We can do that because a drug has either been measured in $n g$ or $\mu g$.
+
+```{r}
+MyData = MyData %>%
+  mutate(Dose =  ifelse(Dose %in% c("1ug", "1ng"), "1" , Dose))
+MyData = MyData %>%
+  mutate(Dose =  ifelse(Dose %in% c("10ug","10ng"), "10" , Dose))
+MyData = MyData %>%
+  mutate(Dose =  ifelse(Dose %in% c("100ug", "100ng"), "100" , Dose))
+MyData = MyData %>%
+  mutate(Dose =  ifelse(Dose %in% c("1000ug", "1000ng"), "1000" , Dose))
+MyData = MyData %>%
+  mutate(Dose =  ifelse(Dose %in% c("0.50%", "0.5%"), "0", Dose))
+```
+
+Renaming the columns and two of the stimulation for convenience.
+
+```{r}
+MyData = MyData %>% 
+            rename("dose" = "Dose",
+                   "drug" = "Drug",
+                   "stimulation" = "Stims") %>%
+            mutate(stimulation = gsub("GM-CSF", "GMCSF", stimulation),
+                   stimulation = gsub("Unstim", "unstim", stimulation))
+```
+
+```{r}
+head(MyData)
+```
+
+## Preprocessing of the features
+
+Here use the asinh transform on the cytometry data and build a feature that is the difference between stimulated and un-stimulated samples .
+
+```{r}
+final_data = c()
+metadata = setdiff(colnames(MyData), c("dose", "stimulation", "median"))
+
+for(drug.name in unique(MyData$drug)){
+  # Filtering the data with a specific drug
+  MyData_drug = MyData %>% filter(drug == drug.name) %>%
+                  mutate(conditions=paste0(stimulation, "_", dose, sep=""))
+  # Getting the stims for this drug
+  conditions = unique(MyData_drug$conditions)
+  # asinh transformation
+  MyData_drug = MyData_drug %>% mutate(feature = asinh(median/5))
+  # Removing the median column and calculating Stimulated - Unstimulated_0
+  MyData_drug = MyData_drug[, names(MyData_drug) != "median"] %>%
+      select(-c(stimulation, dose)) %>%
+      pivot_wider(names_from = conditions, values_from = feature)
+  
+  MyData_drug["unstim_-1"] = MyData_drug["unstim_0"] # Saving the asinh transform of unstim_0
+  
+  for (condition in conditions){
+      MyData_drug[condition] = MyData_drug[condition] - MyData_drug["unstim_0"]
+  }
+  
+  MyData_fin = MyData_drug %>% 
+                  pivot_longer(-all_of(metadata), names_to="conditions",values_to="feature") %>%
+                  mutate(dose=as.double(sub(".*_(.*)", "\\1", conditions)),
+                         stimulation=sub("_.*", "", conditions)) %>%
+                  select(-conditions)
+
+  # Adding the new calculated features to the final dataset
+  final_data = rbind(final_data, MyData_fin)
+}
+```
+
+Saving the final preprocessed dataset.
+
+```{r}
+write.csv(final_data, paste(out_path, "preprocessed.csv", sep = "/"))
+```
+
+## Penalized Data
+
+This is function taking a penalization matrix and the name of the stimulation associated with the matrix and returning the list of the features to be removed from the analysis.
+
+```{r}
+penalization_preprocessing <- function(penalization_matrix, stim.name){
+  penalization_matrix <- penalization_matrix %>%
+  `colnames<-`(c("population", colnames(penalization_matrix)[-1])) %>%
+  mutate(population = as.factor(population)) %>%
+  gather("protein", "penalization", -population) %>% 
+  mutate(feature = paste(population, "_", protein, "_", stim.name, sep="")) %>% 
+  filter(penalization == 0) %>%
+  mutate(feature = sub("_[^_]*_", "_", feature))
+}
+```
+
+Getting all the features to remove due to penalization on each stimulation.
+
+```{r}
+stims = c("IFNa","LPS","IL246","GMCSF")
+discard = c()
+
+for (stim in stims){
+  new_penalization = penalization_preprocessing(read_xlsx(path_to_penalization_file, sheet = stim)[1:12], stim)
+  discard <- c(discard, new_penalization$feature)
+}
+```
+
+Removing penalized features from the unpenalized dataset.
+
+```{r}
+pen_final_data <- final_data %>%
+                    mutate(feature.name = paste(population, "_", reagent, "_", stimulation, sep="")) %>%
+                    filter(!feature.name %in% discard) %>%
+                    select(-feature.name)
+```
+
+Saving penalized dataset.
+
+```{r}
+write.csv(pen_final_data, paste(out_path, "preprocessed_pen.csv", sep = "/"))
+```
+
