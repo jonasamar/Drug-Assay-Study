@@ -1,0 +1,16 @@
+paper_name	data_name
+CD69-CD56dimCD16+Nkcells pSTAT1 IFNalpha	CD69negCD56loCD16negNK_STAT1_IFNa
+Granulocytes	Granulocytes
+CD69+CD56dimCD16+Nkcells pSTAT1 IFNalpha	CD69posCD56loCD16negNK_STAT1_IFNa
+CD62L+CD4Tnaive pMK2 IFNalpha	CD62LposCD4Tnaive_MAPKAPK2_IFNa
+ncMC pCREB GM-CSF	ncMCs_CREB_GMCSF
+CD69+CD8Tmem pMK2 IFNalpha	CD69posCD8Tmem_MAPKAPK2_IFNa
+pDC pSTAT1 IFNalpha	pDCs_STAT1_IFNa
+Bcells pMK2 LPS	Bcells_MAPKAPK2_LPS
+CD4Tem pMK2 basal	CD4Tem_MAPKAPK2_unstim
+CD69+CD8TmempMK2 basal	CD69posCD8Tmem_MAPKAPK2_unstim
+Bcells	Bcells
+CCR5+CCR2+CD4Tem pNFkB IL2-4-6	CCR5posCCR2posCD4Tem_NFkB_IL246
+CCR5+CCR2+CD4Tcm IkB basal	CCR5posCCR2posCD4Tcm_IkB_unstim
+DCpSTAT6 IFNalpha	DCs_STAT6_IFNa
+DC pMK2 basal	DCs_MAPKAPK2_unstim
