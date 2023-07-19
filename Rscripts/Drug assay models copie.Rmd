@@ -1,5 +1,5 @@
 ---
-title: "Drug assay mixed models"
+title: "Drug assay models"
 output: html_notebook
 ---
 
@@ -104,13 +104,13 @@ build.individual.model <- function(drug.name, dataset){
 Doseresponse <- AllPenDoseresponse %>%
                   mutate(dose = log10_1_dose) %>%
                   filter(is.finite(dose))
-
+Doseresponse
 feature.name="Bcells_CREB_IFNa"
 drug.name="Benzylpenicillin"
 Subset <- subset(Doseresponse,
                   (feature == feature.name) & (drug == drug.name),
                   select=c("ID", "dose", "value"))
-id=1
+id=2
 # Subset at the individual level
 data <- subset(Subset,
                   ID==id,
@@ -120,21 +120,29 @@ data
 sorted_data <- data[order(data$dose), ]
 print(sorted_data)
 # Generate a sequence of intermediate doses
-intermediate_dose <- seq(min(data$dose), max(data$dose), length.out = 100)
+intermediate_dose <- seq(min(data$dose), max(data$dose), length.out = 12)
 # Interpolate the medians at the intermediate doses
 interpolated_values <- approx(x = sorted_data$dose, y = sorted_data$value, xout = intermediate_dose)$y
 # Create a data frame with the interpolated data
 interpolated_data <- data.frame(dose = intermediate_dose, value = interpolated_values)
 # Sort the combined data by dose
+interpolated_data <- rbind(interpolated_data, data %>% dplyr::select(-ID))
 interpolated_data <- interpolated_data[order(interpolated_data$dose), ]
 interpolated_data
 
 ggplot() +
-  geom_point(data = interpolated_data, aes(x = dose, y = value)) +
-  geom_point(data = subset, aes(x = dose, y = value), color = "red")
+  geom_point(data = data, aes(x = dose, y = value), color = "red", size=4.) +
+  geom_point(data = interpolated_data, aes(x = dose, y = value))
+  
 #fitmodel <- nls(value ~a/(1 + exp(-b * (dose-c)) ) + d, start=list(a=max(interpolated_data$value),b=sign(data$value[length(data$value)]-data$value[1]),c=1, d=min(interpolated_data$value)), data=interpolated_data)
 library(aomisc)
+fitmodel<-nls(value ~ NLS.LL4(dose, b, c, d, e), data = interpolated_data, control = nls.control(maxiter = 1e10, minFactor = 1e-5))
+plot(fitmodel)
+# Mean average pourcentage error
 
+coefs <- coef(fitmodel)
+preds <- NLS.LL4(data$dose, coefs[["b"]], coefs[["c"]], coefs[["d"]], coefs[["e"]])
+MAPE <- sum(abs((data$value-preds)/data$value)*100)/4
 # building a linear model only when the response is not constant (we get an error message otherwise...)
 if (length(unique(subset$value)) > 1){
   # Linear model and its scores
