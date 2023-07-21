@@ -144,25 +144,26 @@ for (target_dose in target_doses){
 Here we visualize the data for each features individually.
 
 ```{r}
-###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ###### 
-
 # Function creating one plot
 plot_feature_drug_boxplot <- function(target_feature, target_drug){
   subset <- AllPenDoseresponse %>%
               filter(feature == target_feature,
                      drug == target_drug) %>%
               mutate(ID = as.factor(ID))
-  
   p <- ggplot(subset, mapping = aes(x = dose, y = value)) +
       geom_boxplot() +
       geom_point(na.rm = T, alpha = 0.5, aes(color = ID)) +
       geom_line(aes(group = ID, color = ID), size=1.5) +
       xlab(target_feature) +
       ylab(target_drug)
-  
   return(p)
 }
+```
 
+Plotting all the data
+
+```{r}
+###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ######
 # Creating a list containing all the plots
 list_plots <- list()
 for (target_feature in unique(AllPenDoseresponse$feature)){
@@ -170,10 +171,31 @@ for (target_feature in unique(AllPenDoseresponse$feature)){
     list_plots[[length(list_plots)+1]] <- plot_feature_drug_boxplot(target_feature, target_drug)
   }
 }
-
 # Save the grid of boxplots as a PDF file
 pdf(paste0(drug_assay_path, "/plots/drug_feature_boxplot_grid.pdf"), width = 15, height = 9)
 for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+```
+
+Plotting all the features selected by the OOL model
+
+```{r}
+# feature.index
+load(paste0(OOL_path, "/feature_index.rda"))
+# features with positive model_index (selected by the model)
+feature_list <- subset(feature.index, model_index > 0, select=feature)$feature
+# Creating a list containing all the plots
+list_plots <- list()
+for (target_feature in feature_list){
+  for (target_drug in unique(AllPenDoseresponse$drug)){
+    list_plots[[length(list_plots)+1]] <- plot_feature_drug_boxplot(target_feature, target_drug)
+  }
+}
+# Save the grid of boxplots as a PDF file
+pdf(paste0(drug_assay_path, "/plots/drug_slected_feature_boxplot_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(feature_list)-1)){
   grid.draw(grid.arrange(grobs=list_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
 }
 dev.off()

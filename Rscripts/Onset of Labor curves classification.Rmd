@@ -15,7 +15,7 @@ my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
 
 ```{r}
 setwd(paste0(my_path,"/Rscripts"))
-funct_path=paste0(my_path,"/Onset of Labor csv/immunome_noEGA_DOS_pen_OOL.csv")
+funct_path=paste0(my_path,"/Onset of Labor csv/immunome_EGA_DOS_pen_OOL.csv")
 out_path=paste0(my_path,"/Onset of Labor csv")
 ```
 
@@ -28,22 +28,44 @@ library(broom)
 library(gridExtra)
 ```
 
+## Script settings
+
+Selecting if you want the following script to fit models on DOS or EGA and if you want to fit on term, preterm or all the data.
+
+```{r}
+mode <- "DOS" #EGA or DOS
+cohort <- "all" #preterm or term or all
+```
+
 ## Curves classification
 
 Importing the data
 
 ```{r}
 data <- read.csv(funct_path)
+preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
 # removing the datapoints that are post partum
-data <- data %>% filter(DOS <= 0)
+if (cohort=="all"){
+  data <- data %>% filter(DOS <= 0)
+}
+if (cohort=="preterm"){
+  data <- data %>% filter(DOS <= 0)
+  data <- data[apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
+}
+if (cohort=="term"){
+  data <- data %>% filter(DOS <= 0)
+  data <- data[!apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
+}
 
 # timepoints
 DOS = data$DOS
+EGA = data$EGA
 # timepoints squared
 data$DOS2 = DOS^2
+data$EGA2 = EGA^2
 
 # names of the immunome features
-cytof <- colnames(data)[2:(length(colnames(data))-2)]
+cytof <- setdiff(colnames(data), c("DOS", "DOS2", "EGA", "EGA2", "ID"))
 ```
 
 **df_models :** dataframe containing the list of the immunome features with the best fitted model (either linear or quadratic).
@@ -73,14 +95,16 @@ for (feature in cytof){
   # Subset of the data
   data$p1 = unlist(data[feature])
   # Linear fitting
-  fit_lin <- lm(p1 ~ DOS, data)
+  if (mode=="DOS"){fit_lin <- lm(p1 ~ DOS, data)}
+  if (mode=="EGA"){fit_lin <- lm(p1 ~ EGA, data)}
   # Adding linear coefficients to coef_lin
   coef_lin = append(coef_lin,fit_lin$coefficients[2])
   # Adding the AIC of the linear model to cv_lin
   cv_lin = append(cv_lin, AIC(fit_lin))
   
   # Quadratic fitting
-  fit_both <- lm(p1 ~ DOS + DOS2, data)
+  if (mode=="DOS"){fit_both <- lm(p1 ~ DOS + DOS2, data)}
+  if (mode=="EGA"){fit_both <- lm(p1 ~ EGA + EGA2, data)}
   # Adding the AIC of the quadratic model to cv_both
   cv_both = append(cv_both, AIC(fit_both))
   # Adding the coefficient of DOS to coef_quad_d1
@@ -141,8 +165,14 @@ df_sum$pattern = pattern
 Saving df_sum and df_models.
 
 ```{r}
-write.csv(df_sum, paste0(out_path, "/pen_classification_curves_cytof.csv"))
-save(df_models, file=paste0(out_path, "/pen_model_curves_cytof.rda"))
+if (mode=="DOS"){
+  write.csv(df_sum, paste(out_path, "/",cohort,"_pen_classification_curves_cytof.csv", sep=""))
+  save(df_models, file=paste(out_path, "/",cohort,"pen_model_curves_cytof.rda", sep=""))
+}
+if (mode=="EGA"){
+  write.csv(df_sum, paste(out_path, "/",cohort,"_pen_classification_curves_cytof_on_EGA.csv", sep=""))
+  save(df_models, file=paste(out_path, "/",cohort,"_pen_model_curves_cytof_on_EGA.rda", sep=""))
+}
 ```
 
 ## Plot of the models
@@ -174,8 +204,13 @@ feature_list <- c("CD56loCD16posNK_STAT1_IFNa",
 Plot
 
 ```{r}
+if (mode=="DOS"){
+  x=DOS
+}
+if (mode=="EGA"){
+  x=EGA
+}
 plots <- list()
-i <- 0
 for (target_feature in feature_list) {
   coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
   
@@ -183,23 +218,121 @@ for (target_feature in feature_list) {
   y <- data[, target_feature]
   intercept <- coefs[['(Intercept)']]
   if (length(coefs) == 3){ # quadratic model
-    a <- coefs[['DOS2']]
-    b <- coefs[['DOS']]
-    y_pred <- intercept + b * DOS + a * DOS^2
+    a <- coefs[[paste0(mode,2)]]
+    b <- coefs[[mode]]
+    y_pred <- intercept + b * x + a * x^2
   }
   else{ # length(coefs) == 2, linear model
-    slope <- coefs[['DOS']]
-    y_pred <- intercept + slope * DOS
+    slope <- coefs[[mode]]
+    y_pred <- intercept + slope * x
   }
   
-  df <- data.frame(x = DOS, y = y, y_pred = y_pred)
+  df <- data.frame(x = x, y = y, y_pred = y_pred)
   pval <- df_sum[df_sum$cytof == target_feature,]$pval
     
   # Plot
   plot <- ggplot(df, aes(x = x, y = y)) +
-      geom_point(color = "blue", size = 1, na.rm = TRUE) +
-      geom_line(aes(y = y_pred), color = "red") +
+      geom_point(fill = "white", shape=1, color="grey", size = 0.8, na.rm = TRUE) +
+      geom_line(aes(y = y_pred), color = "darkgreen") +
       ggtitle(paste(target_feature, pval, sep=",\np = ")) +
+      ylab("Arcsinh ratio\nover unstim signal") +
+      xlab(mode) +
+      theme(plot.title = element_text(size = 6),
+            panel.background = element_rect(fill = NA, color = NA),
+            plot.background = element_rect(fill = NA, color = NA),
+            axis.title.x = element_text(size = 5),
+            axis.title.y = element_text(size = 5),
+            axis.text.x = element_text(size = 5),
+            axis.text.y = element_text(size = 5),
+            axis.line.x = element_line(),
+            axis.line.y = element_line())
+    
+  plots[[target_feature]] <- plot
+}
+
+# Saving the plots
+pdf(paste(out_path, "/plots/best_features_plot_on_",mode,"_OOL.pdf", sep=""))
+for (i in 0:floor(length(plots)/16)){
+  grid.arrange(grobs = plots[(16*i+1):min(length(plots),(16*i+16))], nrow = 4, ncol = 4)
+}
+dev.off()
+```
+
+Plotting term and preterm features as functions of EGA on the same figures.
+
+```{r}
+#feature.index
+load(paste0(OOL_path, "/feature_index.rda"))
+# Looking at the features with index > 0
+feature_list <- feature.index[feature.index$model_index > 0, "feature"]
+```
+
+
+```{r}
+# Settings
+data <- read.csv(funct_path) %>% filter(DOS <= 0)
+preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
+mode="EGA"
+EGA=data$EGA
+# preterm data, models and summary
+load(paste0(OOL_path, "/preterm_pen_model_curves_cytof_on_EGA.rda"))
+df_preterm_models=df_models
+df_preterm_sum=read.csv(file=paste0(OOL_path,"/preterm_pen_classification_curves_cytof_on_EGA.csv"))
+preterm_data=data[apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
+preterm_EGA=preterm_data$EGA
+# term data, models and summary
+load(paste0(OOL_path, "/term_pen_model_curves_cytof_on_EGA.rda"))
+df_term_models=df_models
+df_term_sum=read.csv(file=paste0(OOL_path,"/term_pen_classification_curves_cytof_on_EGA.csv"))
+term_data=data[!apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
+term_EGA=term_data$EGA
+
+#Plots
+plots <- list()
+for (target_feature in feature_list) {
+  # PRETERM
+  coefs <- df_preterm_models[df_preterm_models$feature == target_feature,]$model[[1]][[1]]
+  # building the predictions
+  y_preterm <- preterm_data[, target_feature]
+  intercept <- coefs[['(Intercept)']]
+  if (length(coefs) == 3){ # quadratic model
+    a <- coefs[[paste0(mode,2)]]
+    b <- coefs[[mode]]
+    y_pred_preterm <- intercept + b * EGA + a * EGA^2
+  }
+  else{ # length(coefs) == 2, linear model
+    slope <- coefs[[mode]]
+    y_pred_preterm <- intercept + slope * EGA
+  }
+  
+  # TERM
+  coefs <- df_term_models[df_term_models$feature == target_feature,]$model[[1]][[1]]
+  # building the predictions
+  y_term <- term_data[, target_feature]
+  intercept <- coefs[['(Intercept)']]
+  if (length(coefs) == 3){ # quadratic model
+    a <- coefs[[paste0(mode,2)]]
+    b <- coefs[[mode]]
+    y_pred_term <- intercept + b * EGA + a * EGA^2
+  }
+  else{ # length(coefs) == 2, linear model
+    slope <- coefs[[mode]]
+    y_pred_term <- intercept + slope * EGA
+  }
+  
+  df_preds <- data.frame(x = EGA, y_pred_preterm = y_pred_preterm, y_pred_term = y_pred_term)
+  df_preterm_points <- data.frame(x = preterm_EGA, y = y_preterm)
+  df_term_points <- data.frame(x = term_EGA, y = y_term)
+  pval_preterm <- df_preterm_sum[df_preterm_sum$cytof == target_feature,]$pval
+  pval_term <- df_preterm_sum[df_preterm_sum$cytof == target_feature,]$pval
+  
+  # Plot
+  plot <- ggplot() +
+      geom_point(data=df_term_points, aes(x = x, y = y), color = "blue", size = 1, na.rm = TRUE) +
+      geom_line(data=df_preds, aes(x = x, y = y_pred_term), color = "red") +
+      geom_point(data=df_preterm_points, aes(x = x, y = y), color = "darkgreen", size = 1, na.rm = TRUE) +
+      geom_line(data=df_preds, aes(x = x, y = y_pred_preterm), color = "orange") +
+      ggtitle(paste(target_feature, "\n (red) term p-value = ",pval_term,"\n (orange) term p-value = ",pval_preterm, sep="")) +
       xlab(NULL) +  # Remove x-axis label
       ylab(NULL) +  # Remove y-axis label
       theme(plot.title = element_text(size = 6))
@@ -208,8 +341,10 @@ for (target_feature in feature_list) {
 }
 
 # Saving the plots
-pdf(paste0(out_path, "/best_features_plot_OOL.pdf"))
-grid.arrange(grobs = plots[1:16], nrow = 4, ncol = 4)
-grid.arrange(grobs = plots[17:17], nrow = 4, ncol = 4)
+pdf(paste(out_path, "/plots/best_features_plot_on_",mode,"term_vs_preterm_OOL.pdf", sep=""))
+for (i in 0:floor(length(plots)/16)){
+  grid.arrange(grobs = plots[(16*i+1):min(length(plots),(16*i+16))], nrow = 4, ncol = 4)
+}
 dev.off()
 ```
+

@@ -2,7 +2,6 @@
 title: "Onset of Labor preprocessing"
 output: html_notebook
 ---
-
 ## Paths
 
 **Copy Paste Here the path to your Drug-Assay-Study folder**
@@ -39,48 +38,41 @@ head(MyData)
 We create an ID, remove the isotope names from the reagent and remove control samples that are not relevant in the analysis.
 
 ```{r}
-MyData = MyData %>% 
+MyData = MyData %>%
           rename("stimulation" = "Stims") %>%
           mutate(reagent = sub("^[^_]*_", "", reagent)) %>%
           mutate(ID = paste0("P",ID, "_", GA)) %>% # Creating a new index ID
           filter(ID != "Pinternalcontrol_na") %>%
           select(-c(EGA, GA))
-
 MyData$ID = as.character(MyData$ID)
 ```
 
 ## Feature engineering
 
-Here, we use the asinh transform on the cytometry data and build a feature that is the difference between stimulated and un-stimulated samples 
+Here, we use the asinh transform on the cytometry data and build a feature that is the difference between stimulated and un-stimulated samples
 
 ```{r}
 final_data = c()
 fil = c("population","reagent","ID")
-
 for(timepoint in unique(MyData$ID)){
   # subset of the data for a given ID
-  MyData_timepoint = MyData %>% 
+  MyData_timepoint = MyData %>%
     filter(ID == timepoint)
-  
   # stimulations associated to this ID
-  stims = unique(MyData_timepoint$stimulation) 
-  
+  stims = unique(MyData_timepoint$stimulation)
   # asinh transform and removing outcomes (DOS)
-  MyData_timepoint = MyData_timepoint %>% 
+  MyData_timepoint = MyData_timepoint %>%
                         mutate(feature = asinh(median/5)) %>%
                         select(-c("DOS", "median")) %>%
                         pivot_wider(names_from = stimulation, values_from = feature)
-  
   # Difference between stim and un-stim
   for (stim in stims){
     if (stim!="unstim"){
       MyData_timepoint[stim] = MyData_timepoint[stim] - MyData_timepoint["unstim"]
     }
   }
-  
   MyData_fin = MyData_timepoint %>%
                   pivot_longer(-all_of(fil), names_to="stimulation",values_to="feature")
-  
   # Adding the new preprocessed data to final_data
   final_data = rbind(final_data, MyData_fin)
 }
@@ -100,15 +92,14 @@ write.csv(final_data, paste0(out_path, "/preprocessed_OOL.csv"), row.names=FALSE
 # Removing remaining unrelevant data for ML models
 x = final_data[!grepl("pp", final_data$ID),] %>% #removing pp ID which correspond to post partum data
       dcast(ID ~ population + reagent + stimulation, value.var = "feature")
-
 # Importing the row data again to get the outcomes (DOS) and the EGA
-TTL = read.csv(funct_path) %>% 
-        rename("stimulation" = "Stims") %>% 
+TTL = read.csv(funct_path) %>%
+        rename("stimulation" = "Stims") %>%
         dplyr::mutate(ID = paste0("P",ID, "_", GA)) %>% # Creating a new index ID
         filter(ID != "Pinternalcontrol_na") %>%
         select(c(EGA, DOS, ID)) %>%
-        filter(!grepl("pp", ID)) %>% 
-        group_by(ID) %>% 
+        filter(!grepl("pp", ID)) %>%
+        group_by(ID) %>%
         filter(row_number()==1) %>%
         mutate(DOS = as.numeric(DOS)) %>%
         mutate(EGA = as.numeric(EGA))
@@ -119,12 +110,12 @@ Useful datasets for ML models.
 ```{r}
 # Dataset of immunome features with no Estimator of Gestational Age (EGA)
 im_noEGA = x
-
 # Dataset of immunome features with no EGA and with DOS (outcome)
 im_noEGA_DOS = merge(x, select(TTL, "DOS"), by = "ID")
-
 # Dataset with EGA
 im_EGA = merge(x, select(TTL, "EGA"), by = "ID")
+# Dataset with EGA qnd DOS
+im_EGA_DOS = merge(x, select(TTL, c("EGA", "DOS")), by = "ID")
 ```
 
 Saving the datasets.
@@ -133,6 +124,7 @@ Saving the datasets.
 write.csv(im_noEGA, paste0(out_path, "/immunome_noEGA_OOL.csv"), row.names=FALSE)
 write.csv(im_noEGA_DOS, paste0(out_path, "/immunome_noEGA_DOS_OOL.csv"), row.names=FALSE)
 write.csv(im_EGA, paste0(out_path, "/immunome_EGA_OOL.csv"), row.names=FALSE)
+write.csv(im_EGA_DOS, paste0(out_path, "/immunome_EGA_DOS_OOL.csv"), row.names=FALSE)
 ```
 
 Creating separated csv files for the outcomes (DOS) and EGA.
@@ -140,22 +132,22 @@ Creating separated csv files for the outcomes (DOS) and EGA.
 ```{r}
 DOS = subset(TTL, select = c(ID, DOS))
 EGA = subset(TTL, select = c(EGA, ID))
-
 write.csv(DOS, paste0(out_path, "/outcome_OOL.csv"), row.names=FALSE)
 write.csv(EGA, paste0(out_path, "/EGA_OOL.csv"), row.names=FALSE)
 ```
 
 ### Penalized Data
 
-This is function taking a penalization matrix and the name of the stimulation associated with the matrix and returning the list of the features to be removed from the analysis.
+This is function taking a penalization matrix and the name of the stimulation associated with the matrix and returning the list of the 
+features to be removed from the analysis.
 
 ```{r}
 penalization_preprocessing <- function(penalization_matrix, stim.name){
   penalization_matrix <- penalization_matrix %>%
   `colnames<-`(c("population", colnames(penalization_matrix)[-1])) %>%
   mutate(population = as.factor(population)) %>%
-  gather("protein", "penalization", -population) %>% 
-  mutate(feature = paste(population, "_", protein, "_", stim.name, sep="")) %>% 
+  gather("protein", "penalization", -population) %>%
+  mutate(feature = paste(population, "_", protein, "_", stim.name, sep="")) %>%
   filter(penalization == 0) %>%
   mutate(feature = sub("_[^_]*_", "_", feature))
 }
@@ -166,7 +158,6 @@ Getting all the features to remove due to penalization on each stimulation.
 ```{r}
 stims = c("IFNa","LPS","IL246","GMCSF")
 discard = c()
-
 for (stim in stims){
   new_penalization = penalization_preprocessing(read_xlsx(path_to_penalization_file, sheet = stim)[1:12], stim)
   discard <- c(discard, new_penalization$feature)
@@ -179,6 +170,7 @@ Removing penalized features from the unpenalized datasets.
 im_noEGA_pen <- select(im_noEGA, -one_of(discard))
 im_noEGA_DOS_pen <- select(im_noEGA_DOS, -one_of(discard))
 im_EGA_pen <- select(im_EGA, -one_of(discard))
+im_EGA_DOS_pen <- select(im_EGA_DOS, -one_of(discard))
 ```
 
 Saving penalized datasets.
@@ -187,4 +179,5 @@ Saving penalized datasets.
 write.csv(im_noEGA_pen, paste0(out_path, "/immunome_noEGA_pen_OOL.csv"), row.names=FALSE)
 write.csv(im_noEGA_DOS_pen, paste0(out_path, "/immunome_noEGA_DOS_pen_OOL.csv"), row.names=FALSE)
 write.csv(im_EGA_pen, paste0(out_path, "/immunome_EGA_pen_OOL.csv"), row.names=FALSE)
+write.csv(im_EGA_DOS_pen, paste0(out_path, "/immunome_EGA_DOS_pen_OOL.csv"), row.names=FALSE)
 ```

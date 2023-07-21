@@ -25,17 +25,105 @@ library(tidyverse)
 library(tidyselect)
 library(reshape2)
 library(lme4)
-library(lmerTest)
+#library(lmerTest)
 library(ggplot2)
 #library(r2glmm)
-#library(sjstats)
+library(sjstats)
 library(doSNOW)
 library(parallel)
-library(dplyr)
 library(reticulate)
+library(aomisc)
+library(dplyr)
 ```
 
-## Linear mixed models
+## Building model function
+
+```{r}
+# Function which attempts to build sigmoid models on the data
+build.sigmoid.or.linear.model <- function(data, feature.name, drug.name, id="median"){
+  # Building a linear or sigmoid model only when the response is not constant (we get an error message otherwise...)
+  if (length(unique(data$value)) > 1){
+    # Generate a sequence of intermediate doses
+    intermediate_dose_0 <- lapply(1:(length(data$dose) - 1), function(i) (data$dose[i + 1] + data$dose[i])/2)
+    intermediate_dose_1 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+(data$dose[i + 1] - data$dose[i])/3)
+    intermediate_dose_2 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+2*(data$dose[i + 1] - data$dose[i])/3)
+    intermediate_dose_3 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+(data$dose[i + 1] - data$dose[i])/4)
+    intermediate_dose_4 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+3*(data$dose[i + 1] - data$dose[i])/4)
+    intermediate_dose <- c(unlist(intermediate_dose_0), unlist(intermediate_dose_1), unlist(intermediate_dose_2), unlist(intermediate_dose_3), unlist(intermediate_dose_4), data$dose)
+    # Interpolate the intermediate values at the intermediate doses
+    interpolated_values_0 <- lapply(1:(length(data$value) - 1), function(i) (data$value[i + 1] + data$value[i])/2)
+    interpolated_values_1 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+2*(data$value[i + 1] - data$value[i])/100)
+    interpolated_values_2 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+98*(data$value[i + 1] - data$value[i])/100)
+    interpolated_values_3 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+(data$value[i + 1] - data$value[i])/100)
+    interpolated_values_4 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+99*(data$value[i + 1] - data$value[i])/100)
+    interpolated_values <- c(unlist(interpolated_values_0), unlist(interpolated_values_1), unlist(interpolated_values_2),unlist(interpolated_values_3), unlist(interpolated_values_4), data$value)
+    # Create a data frame with the interpolated data
+    interpolated_data <- data.frame(dose = intermediate_dose, value = interpolated_values)
+    # Sort the interpolated data by dose
+    interpolated_data <- interpolated_data[order(interpolated_data$dose), ]
+    
+    # Sigmoid function we want to try to fit
+    sigmoid_model <- function(x, b, c, d, e) {
+      c + (d - c) / (1 + exp(-b * (x - e)))
+    }
+    model <- NULL
+    class <- NULL
+    # Attempt to fit the sigmoid model using nls() and fall back to a linear model
+    try_result <- tryCatch({
+      #Initilize parameters
+      gaps <- abs(diff(data$value))
+      jump <- which.max(gaps)
+      start_e=mean(c(data$dose[jump], data$dose[jump+1]))
+      start_b=sign(data$value[jump+1]-data$value[jump])
+      startp <- list(b=start_b, c=min(data$value), d=max(data$value), e=start_e)
+      # Model fitting
+      model <-nls(value ~ sigmoid_model(dose, b, c, d, e), data = interpolated_data, start=startp, algorithm = "port")
+      class <- "sigmoid"
+    }, error = function(e) {
+      model<<-suppressMessages(lm(value ~ dose, data = data))
+      class <<- "linear"
+    })
+    # Check if there was an error
+    if (class=="sigmoid") {
+      # Sigmoid model fitting was successful
+      class <- "sigmoid"
+      # Mean average pourcentage error
+      coefs <- coef(model)
+      preds <- sigmoid_model(data$dose, coefs[["b"]], coefs[["c"]], coefs[["d"]], coefs[["e"]])
+      MAPE <- sum(abs((data$value-preds)/data$value)*100)/4
+      scores <- list("MAPE"=MAPE)
+    }
+    if (class=="linear"){
+      # Sigmoid model fitting was NOT successful
+      coefs <- coef(model) %>% 
+          setNames(c("Intercept", "Slope"))
+      aic <- AIC(model)
+      pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
+      residuals <- residuals(model)
+      rmse <- sqrt(mean(residuals^2))
+      scores <- list("aic"=aic, "pval"=pval, "rmse"=rmse)
+    }
+  }else{
+    # When there is only one value, the model is constant
+    model <- list(unique(data$value))
+    aic <- NA
+    pval <- NA
+    rmse <- NA
+    scores <- list("aic"=aic, "pval"=pval, "rmse"=rmse)
+    class <- "constant"
+  }
+  # Adding new linear model to models
+  return(data.frame(feature = feature.name,
+                     drug = drug.name,
+                     ID=id,
+                     model = I(list(model)),
+                     scores = I(list(scores)),
+                     class = class,
+                     stringsAsFactors = FALSE))
+}
+```
+
+## Individual models
 
 Importing penalized preprocessed data with the different scales.
 
@@ -56,138 +144,22 @@ build.individual.model <- function(drug.name, dataset){
     Subset <- dataset %>% 
                   filter(feature == !!feature.name) %>%
                   filter(drug == !!drug.name)  %>%
-                  select(c("ID", "dose", "value"))
+                  dplyr::select(c("ID", "dose", "value"))
     for (id in unique(Subset$ID)){
       # Subset at the individual level
       subset <- Subset %>%
                   filter(ID==id) %>%
-                  select(c("ID", "dose", "value"))
-      # building a linear model only when the response is not constant (we get an error message otherwise...)
-      if (length(unique(subset$value)) > 1){
-        # Linear model and its scores
-        model <- suppressMessages(lm(value ~ dose, data = subset))
-        coefs <- coef(model) %>% 
-                setNames(c("Intercept", "Slope"))
-      
-        aic <- AIC(model)
-        pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
-        residuals <- residuals(model)
-        rmse <- sqrt(mean(residuals^2))
-      }
-      else{
-        # When there is only one value, the model is constant
-        model <- list(unique(subset$value))
-        aic <- NA
-        pval <- NA
-        rmse <- NA
-        coefs <- data.frame(ID = 1, Intercept = NA, Slope = NA)
-      }
+                  dplyr::select(c("ID", "dose", "value"))
+      new_model <- build.sigmoid.or.linear.model(subset,feature.name, drug.name,id)
       # Adding new linear model to models
-      models <- rbind(models,
-                      data.frame(feature = feature.name,
-                                 drug = drug.name,
-                                 ID=id,
-                                 model = I(list(model)),
-                                 slope = coefs[["Slope"]],
-                                 rmse = rmse,
-                                 aic = aic,
-                                 pval = pval,
-                                 stringsAsFactors = FALSE))
+      models <- rbind(models,new_model)
     }
   }
   return(models)
 }
 ```
 
-```{r}
-###############################
-Doseresponse <- AllPenDoseresponse %>%
-                  mutate(dose = log10_1_dose) %>%
-                  filter(is.finite(dose))
-Doseresponse
-feature.name="Bcells_CREB_IFNa"
-drug.name="Benzylpenicillin"
-Subset <- subset(Doseresponse,
-                  (feature == feature.name) & (drug == drug.name),
-                  select=c("ID", "dose", "value"))
-id=2
-# Subset at the individual level
-data <- subset(Subset,
-                  ID==id,
-                  select=c("ID", "dose", "value"))
-data
-# Sort the dataset by dose
-sorted_data <- data[order(data$dose), ]
-print(sorted_data)
-# Generate a sequence of intermediate doses
-intermediate_dose <- seq(min(data$dose), max(data$dose), length.out = 12)
-# Interpolate the medians at the intermediate doses
-interpolated_values <- approx(x = sorted_data$dose, y = sorted_data$value, xout = intermediate_dose)$y
-# Create a data frame with the interpolated data
-interpolated_data <- data.frame(dose = intermediate_dose, value = interpolated_values)
-# Sort the combined data by dose
-interpolated_data <- rbind(interpolated_data, data %>% dplyr::select(-ID))
-interpolated_data <- interpolated_data[order(interpolated_data$dose), ]
-interpolated_data
-
-ggplot() +
-  geom_point(data = data, aes(x = dose, y = value), color = "red", size=4.) +
-  geom_point(data = interpolated_data, aes(x = dose, y = value))
-  
-#fitmodel <- nls(value ~a/(1 + exp(-b * (dose-c)) ) + d, start=list(a=max(interpolated_data$value),b=sign(data$value[length(data$value)]-data$value[1]),c=1, d=min(interpolated_data$value)), data=interpolated_data)
-library(aomisc)
-fitmodel<-nls(value ~ NLS.LL4(dose, b, c, d, e), data = interpolated_data, control = nls.control(maxiter = 1e10, minFactor = 1e-5))
-plot(fitmodel)
-# Mean average pourcentage error
-
-coefs <- coef(fitmodel)
-preds <- NLS.LL4(data$dose, coefs[["b"]], coefs[["c"]], coefs[["d"]], coefs[["e"]])
-MAPE <- sum(abs((data$value-preds)/data$value)*100)/4
-# building a linear model only when the response is not constant (we get an error message otherwise...)
-if (length(unique(subset$value)) > 1){
-  # Linear model and its scores
-  if (length(subset$value) <= 3){
-    model <- suppressMessages(lm(value ~ dose, data = subset))
-    coefs <- coef(model) %>% 
-      setNames(c("Intercept", "Slope"))
-        
-    aic <- AIC(model)
-    pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
-    residuals <- residuals(model)
-    rmse <- sqrt(mean(residuals^2))
-  }
-  # Sigmoid model and its scores
-  else{
-    f <- function(x, r, K, N0) {K /(1 + (K/N0 - 1) * exp(-r *x))}
-    pstart <- c(r = 0.1, K = max(combined_data$value), N0 = min(combined_data$value))
-    model <- nls(value ~ f(dose, r, K,N0), start = pstart, data=combined_data)
-  }
-  
-}else{
-  # When there is only one value, the model is constant
-  model <- list(unique(subset$value))
-  aic <- NA
-  pval <- NA
-  rmse <- NA
-  coefs <- data.frame(ID = 1, Intercept = NA, Slope = NA)
-}
-# Adding new linear model to models
-data.frame(feature = feature.name,
-                                 drug = drug.name,
-                                 ID=id,
-                                 model = I(list(model)),
-                                 slope = coefs[["Slope"]],
-                                 rmse = rmse,
-                                 aic = aic,
-                                 pval = pval,
-                                 stringsAsFactors = FALSE)
-
-
-
-#####################
-```
-
-**log10.linear.mixed.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10 scale of the concentrations.
+**log10.individual.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10 scale of the concentrations.
 
 ```{r}
 # Setting the dose values to their log10 transform
@@ -200,7 +172,7 @@ cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 
 # Create individual linear models on log10 scale
-log10.individual.linear.model = foreach(drug.name = unique(Doseresponse$drug), 
+log10.individual.model = foreach(drug.name = unique(Doseresponse$drug), 
                                    .packages = c("tidyverse","lme4", "lmerTest","dplyr"),
                                    .combine = rbind) %dopar% build.individual.model(drug.name, Doseresponse)
 
@@ -208,11 +180,12 @@ log10.individual.linear.model = foreach(drug.name = unique(Doseresponse$drug),
 stopCluster(cl)
 
 # Saving mixed models
-save(log10.individual.linear.model, 
-     file=paste0(out_path, "/log10 individual linear models.rda"))
+save(log10.individual.model, 
+     file=paste0(out_path, "/log10 individual models.rda"))
 ```
 
-**log10_1.linear.mixed.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10(x+1) scale of the concentrations.
+**log10_1.individual.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10(x+1) scale of the concentrations.
+
 
 ```{r}
 # Setting the dose values to their log10(x+1) transform
@@ -225,7 +198,7 @@ cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 
 # Create individual linear models on log10 scale
-log10_1.individual.linear.model = foreach(drug.name = unique(Doseresponse$drug), 
+log10_1.individual.model = foreach(drug.name = unique(Doseresponse$drug), 
                                    .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
                                    .combine = rbind) %dopar% build.individual.model(drug.name, Doseresponse)
 
@@ -233,11 +206,11 @@ log10_1.individual.linear.model = foreach(drug.name = unique(Doseresponse$drug),
 stopCluster(cl)
 
 # Saving mixed models
-save(log10_1.individual.linear.model, 
-     file=paste0(out_path, "/log10_1 individual linear models.rda"))
+save(log10_1.individual.model, 
+     file=paste0(out_path, "/log10_1 individual models.rda"))
 ```
 
-**pseudo_log10.linear.mixed.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a pseudo_log10 (=asinh(x/2)/log(10)) scale of the concentrations.
+**pseudo_log10.individual.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a pseudo_log10 (=asinh(x/2)/log(10)) scale of the concentrations.
 
 ```{r}
 # Setting the dose values to their pseudo log transform
@@ -250,7 +223,7 @@ cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 
 # Create linear mixed models on pseudo log scale
-pseudo_log10.individual.linear.model = foreach(drug.name = unique(Doseresponse$drug), 
+pseudo_log10.individual.model = foreach(drug.name = unique(Doseresponse$drug), 
                                    .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
                                    .combine = rbind) %dopar% build.individual.model(drug.name, Doseresponse)
 
@@ -258,8 +231,8 @@ pseudo_log10.individual.linear.model = foreach(drug.name = unique(Doseresponse$d
 stopCluster(cl)
 
 # Saving mixed models
-save(pseudo_log10.individual.linear.model, 
-     file=paste0(out_path, "/pseudo_log10 individual linear models.rda"))
+save(pseudo_log10.individual.model, 
+     file=paste0(out_path, "/pseudo_log10 individual models.rda"))
 ```
 
 ## Linear models on medians
@@ -274,7 +247,7 @@ load(paste0(out_path, "/median pen dose response with scales.rda"))
 Function building a the linear models for a given drug across the 720 features.
 
 ```{r}
-build.median.linear.models <- function(drug.name, dataset){
+build.median.models <- function(drug.name, dataset){
   # Create an empty data frame to store the results
   models <- data.frame(stringsAsFactors = FALSE)
   
@@ -284,72 +257,45 @@ build.median.linear.models <- function(drug.name, dataset){
     subset <- dataset %>% 
                   filter(feature == !!feature.name) %>%
                   filter(drug == !!drug.name)  %>%
-                  select(c("dose", "median_value")) %>%
+                  mutate(value=median_value) %>%
+                  dplyr::select(c("dose", "value")) %>%
                   distinct() %>%
                   suppressMessages()
 
-    # building a mixed model only when the response is not constant (we get an error message otherwise...)
-    if (length(unique(subset$median_value)) > 1){
-      # Linear model and its scores
-      model <- suppressMessages(lm(median_value ~ dose, data = subset))
-      coefs <- coef(model) %>% 
-                setNames(c("Intercept", "Slope"))
-      
-      aic <- AIC(model)
-      pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
-      residuals <- residuals(model)
-      rmse <- sqrt(mean(residuals^2))
-    }
-    else{
-      # When there is only one value, the model is constant
-      model <- list(unique(subset$median_value))
-      aic <- NA
-      pval <- NA
-      rmse <- NA
-      coefs <- data.frame(ID = 1, Intercept = NA, Slope = NA)
-    }
-    # Adding new mixed model to mixed.model
-    models <- rbind(models,
-                    data.frame(feature = feature.name,
-                               drug = drug.name,
-                               model = I(list(model)),
-                               slope = coefs[["Slope"]],
-                               rmse = rmse,
-                               aic = aic,
-                               pval = pval,
-                               stringsAsFactors = FALSE))
-    
+    new_model <- build.sogmoid.or.linear.model(subset,feature.name, drug.name)
+    # Adding new linear model to models
+    models <- rbind(models,new_model)
   }
   return(models)
 }
 ```
 
-**log10.median.linear.model :** dataframe containing all the information about the linear models that are built on each feature on a log10 scale of the concentrations.
+**log10.median.model :** dataframe containing all the information about the linear models that are built on each feature on a log10 scale of the concentrations.
 
 ```{r}
 # Setting the dose values to their log10 transform
 Doseresponse <- MedianDoseresponse %>%
                   mutate(dose = log10_dose) %>%
                   filter(is.finite(dose))
-
+build.median.linear.models(drug.name, Doseresponse)
 # Set up parallel backend using doParallel
 cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 
 # Create linear mixed models on log10 scale
-log10.median.linear.model = foreach(drug.name = unique(Doseresponse$drug), 
+log10.median.model = foreach(drug.name = unique(Doseresponse$drug), 
                                    .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
-                                   .combine = rbind) %dopar% build.median.linear.models(drug.name, Doseresponse)
+                                   .combine = rbind) %dopar% build.median.models(drug.name, Doseresponse)
 
 # Close parallel backend
 stopCluster(cl)
 
 # Saving mixed models
-save(log10.median.linear.model, 
-     file=paste0(out_path, "/log10 median linear models.rda"))
+save(log10.median.model, 
+     file=paste0(out_path, "/log10 median models.rda"))
 ```
 
-**log10_1.median.linear.model :** dataframe containing all the information about the linear models that are built on each feature on a log10(x+1) scale of the concentrations.
+**log10_1.median.model :** dataframe containing all the information about the linear models that are built on each feature on a log10(x+1) scale of the concentrations.
 
 ```{r}
 # Setting the dose values to their log10 transform
@@ -362,19 +308,19 @@ cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 
 # Create linear mixed models on log10 scale
-log10_1.median.linear.model = foreach(drug.name = unique(Doseresponse$drug),
+log10_1.median.model = foreach(drug.name = unique(Doseresponse$drug),
                                       .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
-                                      .combine = rbind) %dopar% build.median.linear.models(drug.name, Doseresponse)
+                                      .combine = rbind) %dopar% build.median.models(drug.name, Doseresponse)
 
 # Close parallel backend
 stopCluster(cl)
 
 # Saving mixed models
-save(log10_1.median.linear.model, 
-     file=paste0(out_path, "/log10_1 median linear models.rda"))
+save(log10_1.median.model, 
+     file=paste0(out_path, "/log10_1 median models.rda"))
 ```
 
-**pseudo_log10.median.linear.model :** dataframe containing all the information about the linear models that are built on each feature on a pseudo_log10 scale of the concentrations.
+**pseudo_log10.median.model :** dataframe containing all the information about the linear models that are built on each feature on a pseudo_log10 scale of the concentrations.
 
 ```{r}
 # Setting the dose values to their log10 transform
@@ -387,16 +333,16 @@ cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 
 # Create linear mixed models on log10 scale
-pseudo_log10.median.linear.model = foreach(drug.name = unique(Doseresponse$drug),
+pseudo_log10.median.model = foreach(drug.name = unique(Doseresponse$drug),
                                            .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
-                                           .combine = rbind) %dopar% build.median.linear.models(drug.name, Doseresponse)
+                                           .combine = rbind) %dopar% build.median.models(drug.name, Doseresponse)
 
 # Close parallel backend
 stopCluster(cl)
 
 # Saving mixed models
-save(pseudo_log10.median.linear.model, 
-     file=paste0(out_path, "/pseudo_log10 median linear models.rda"))
+save(pseudo_log10.median.model, 
+     file=paste0(out_path, "/pseudo_log10 median models.rda"))
 ```
 
 ## Determining the most relevant scale and model fitting strategy
@@ -405,8 +351,8 @@ Loading the models (Necessary only if you haven't run all the code above).
 
 ```{r}
 for (scale in c("pseudo_log10", "log10", "log10_1")){
-  load(paste(out_path, "/", scale, " median linear models.rda", sep=""))
-  load(paste(out_path, "/", scale, " individual linear models.rda", sep=""))
+  load(paste(out_path, "/", scale, " median models.rda", sep=""))
+  load(paste(out_path, "/", scale, " individual models.rda", sep=""))
 }
 ```
 
@@ -527,8 +473,8 @@ model_coefs <- target_models %>%
 
 # Subset of the data for the chosen feature and drug
 data <- Doseresponse %>% 
-            filter(feature == !!target_feature) %>%
-            filter(drug == !!target_drug) %>%
+            filter(feature == target_feature) %>%
+            filter(drug == target_drug) %>%
             select(ID, dose, value)
 
 data_rani <- left_join(data, model_coefs, by = "ID")
@@ -578,8 +524,8 @@ model_coefs <- coef(target_model) %>%
 
 # Subset of the data for the chosen feature and drug
 data <- Doseresponse %>% 
-            filter(feature == !!target_feature) %>%
-            filter(drug == !!target_drug) %>%
+            filter(feature == target_feature) %>%
+            filter(drug == target_drug) %>%
             select(ID, dose, value)
 
 data_rani <- merge(data, model_coefs)

@@ -29,6 +29,7 @@ library(zoo)
 library(ggVennDiagram)
 library(tidyverse)
 library(readxl)
+library(dplyr)
 set.seed(2018)
 ```
 
@@ -52,6 +53,7 @@ preprocessing <- function(dataset, NA_threshold, std_threshold){
     }
   }
   prepro_data <- prepro_data[,!colnames(prepro_data) %in% rm_cols]
+  cols <- colnames(prepro_data)
   # Imputing missing values with median of the colum
   for (col_name in cols[!cols %in% "ID"]){
     median <- median(prepro_data[[col_name]], na.rm = TRUE)
@@ -59,7 +61,7 @@ preprocessing <- function(dataset, NA_threshold, std_threshold){
   }
   # Removing columns with standard deviation below std_threshold
   keep_cols <- which(colSds(as.matrix(prepro_data[,-which(names(prepro_data) == "ID")]))>std_threshold)
-  prepro_data <- prepro_data[,keep_cols]
+  prepro_data <- prepro_data[,names(keep_cols)]
   return(prepro_data)
 }
 ```
@@ -75,15 +77,18 @@ load(paste0(OOL_path, "/immunome_noEGA_OOL_with_drugs.rda"))
 # Outcomes
 Yh <- read_csv(paste0(OOL_path, "/outcome_OOL.csv"), show_col_types = FALSE)
 # CYTOF data
-CYTOF <- read_csv(paste0(OOL_path, "/immunome_noEGA_pen_OOL.csv"), show_col_types = FALSE)
+CYTOF <- read_csv(paste0(OOL_path, "/immunome_EGA_pen_OOL.csv"), show_col_types = FALSE)
 # Reorordering and filtering CYTOF data
 data <- left_join(Yh, CYTOF, by="ID") %>% filter((DOS <= DOS_sup)&(DOS>=DOS_inf))
+preterm_rows <- which(grepl(paste(c("P17_", "P8_", "P3_", "P5_", "P27_"), collapse = "|"), data$ID))
 Yh <- data$DOS
-CYTOF <- select(data, -DOS)
+EGA <- data$EGA
+CYTOF <- dplyr::select(data, -DOS)
+CYTOF <- dplyr::select(data, -EGA) #Removing EGA (or not)
 # Preprocessing
 CYTOF <- preprocessing(CYTOF, 0.2, 0.)
 # Patients Id
-Id <- as.factor(str_extract(CYTOF[["ID"]], "(?<=P)\\d+"))
+Id <- as.factor(str_extract(data[["ID"]], "(?<=P)\\d+"))
 ```
 
 ## Model
@@ -106,8 +111,6 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   suppressMessages(library(randomForest, quietly = TRUE))
   suppressMessages(library(glmnet, quietly = TRUE))
   set.seed(2018+123*i)
-  
-  X <- X[, -which(colnames(X) == "ID")] # Removing the ID column
 
   iInd=which(foldid==unique(foldid)[i])
   if(length(iInd)<2){
@@ -129,28 +132,31 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
     original.X=X # Keeping a copy of X without any columns removed
     X=X[, complete.cases(t(X))] #we remove those features
   }
-  
   # Calculate Spearman's rank correlation and p-value
   results <- vector("list", ncol(X))
   for (j in seq_len(ncol(X))) {
     res <- cor.test(X[, j], Y, method = "spearman", use = "pairwise.complete.obs", exact = FALSE)
     results[[j]] <- data.frame(colname = colnames(X)[j], pvalue = res$p.value)
   }
-  
+
   # Combine results into a data frame
-  pval_df <- bind_rows(results) %>% 
+  pval_df <- bind_rows(results) %>%
                 mutate(pvalue = as.numeric(pvalue))
-  
+
   # Removing features with pvalue under a pval_threshold
   fiter.out.features <- pval_df[pval_df$pvalue >= parm$pval_threshold, "colname"]
   X <- X[,!(colnames(X) %in% fiter.out.features)]
   rm_columns <- c(setNames(match(fiter.out.features, colnames(original.X)), fiter.out.features), rm_columns)
 
+  if (ncol(X) < 2){
+    X=cbind(X,rep(1, nrow(X)))
+  }
+
   XX=X[-iInd,]
   YY=Y[-iInd]
   XT=X[iInd,]
   fld=as.numeric(foldid[-iInd])
-  
+
   # Transforming the values of fld so that they range from 1 to 52 (avoiding one warning from glmet)
   fld[fld>=i]=fld[fld>=i]-1
 
@@ -165,19 +171,19 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   ret$ptrain1 = predict(cvglm, XX, s='lambda.1se')
   ret$coef = coef(cvglm, s='lambda.1se')[-1]
   ret$model = cvglm
-  
+
   # Elastic Net
   EN_cv = cv.glmnet(x = XX, y = YY, foldid = fld, alpha = parm$a)
   ret$EN_p1 = predict(EN_cv, XT, s=EN_cv$lambda.min)
   ret$EN_ptrain1 = predict(EN_cv, XX, s=EN_cv$lambda.min)
   ret$EN_coef = coef(EN_cv, s=EN_cv$lambda.min)[-1]
-  
+
   # Ridge Regression
   ridge_cv = cv.glmnet(x = XX, y = YY, foldid = fld, alpha = 0)
   ret$ridge_p1 = predict(ridge_cv, XT, s=ridge_cv$lambda.min)
   ret$ridge_ptrain1 = predict(ridge_cv, XX, s=ridge_cv$lambda.min)
   ret$ridge_coef = coef(ridge_cv, s=ridge_cv$lambda.min)[-1]
-  
+
   # Adaptive LASSO
   alasso1_cv = cv.glmnet(x = XX, y = YY, foldid = fld, alpha = 1,
                         penalty.factor = 1 / abs(ret$ridge_coef),
@@ -185,13 +191,13 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   ret$alasso_p1 = predict(alasso1_cv, XT, s=alasso1_cv$lambda.min)
   ret$alasso_ptrain1 = predict(alasso1_cv, XX, s=alasso1_cv$lambda.min)
   ret$alasso_coef = coef(alasso1_cv, s=alasso1_cv$lambda.min)[-1]
-  
+
   # Random Forest
   rd_forest_cv = randomForest(x = XX, y = YY, importance=TRUE)
   ret$rd_forest_p1 = predict(rd_forest_cv, XT)
   ret$rd_forest_ptrain1 = predict(rd_forest_cv, XX)
   ret$rd_forest_importance = rd_forest_cv$importance
-  
+
   if (predict.simulated.data){
    # Predictions of Adaptive LASSO on simulated data
     for (target_drug in unique(all.simulated.data$drug)){
@@ -201,7 +207,7 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
         filter(drug==target_drug,
                grepl(paste("P",levels(foldid)[i],"_",sep=""),ID)) %>%
         # Removing the columns which were removed in CYTOF
-        select(colnames(CYTOF), -names(rm_columns)) %>%
+        dplyr::select(colnames(CYTOF), -names(rm_columns)) %>%
         # Imputing the missing values with the medians of the corresponding CYTOF columns
         mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
         # Converting to a matrix
@@ -306,7 +312,8 @@ Plotting the best pvalue threshold with their corresponding best spearmanr
 
 ```{r}
 # listr
-load(paste0(OOL_path, "/Pvalue threshold optimization.rda"))
+#load(paste0(OOL_path, "/Pvalue threshold optimization.rda"))
+load(paste0(OOL_path, "/Pvalue threshold optimization with EGA.rda"))
 
 # Reshaping listr for plotting
 listr <- as.data.frame(listr) %>% 
@@ -337,6 +344,7 @@ parm=list()
 parm$scale='Patient'
 parm$a=0.5
 npt=length(unique(Id))
+parm$pval_threshold=1e-13
 
 # Random.Forest settings
 #parm$pval_threshold=0.056
@@ -345,14 +353,17 @@ npt=length(unique(Id))
 #parm$pval_threshold=0.5075
 #parm$predict.model="ElasticNet"
 # Lasso1.se settings
-parm$pval_threshold=0.5
-parm$predict.model="Lasso.1se"
+#parm$pval_threshold=0.5
+#parm$predict.model="Lasso.1se"
+# with EGA
+#parm$pval_threshold=1e-14
+#parm$predict.model="Lasso.1se"
 
 # Opening backend-configuration
 cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 # Getting models and predictions
-prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, TRUE)
+prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, FALSE) 
 list_preds<-aggregation.of.predictions(prdC)
 # Closing backend configuration
 stopCluster(cl)
@@ -363,19 +374,25 @@ stopCluster(cl)
 Performances of the models
 
 ```{r}
+# X axis
+x_axis="EGA" # EGA or DOS
+
 require(Metrics)
 # Plot function
-plot.model.results <- function(y_pred, y_true, title){
+plot.model.results <- function(y_pred, y_true, title, x_name="DOS"){
   myPv = cor.test(y_true, y_pred, method = 'spearman', exact = FALSE)$p.value
   myerr = sqrt(mean((y_true-y_pred)^2))
   myr2 = 1 - sum((y_true - y_pred)^2) / sum((y_true - mean(y_true))^2)
   mycorr = cor(y_true, y_pred, method = "spearman")
   
+  if (x_name=="DOS"){dash_coefs=c(0.,1.)}
+  if (x_name=="EGA"){dash_coefs=c(-259, 6.5)}
+
   data <- data.frame(x = y_true, y = y_pred)
   p <- ggplot(data, aes(x = x, y = y)) + 
         geom_point() +
-        geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-        labs(x = "DOS", y = "Prediction") +
+        geom_abline(intercept = dash_coefs[1], slope = dash_coefs[2], linetype = "dashed") +
+        labs(x = x_name, y = "Prediction") +
         ggtitle(paste("Model : ", title,
                       "\nSpearmanr : ", round(mycorr, digits = 5), 
                       "\nRMSE : ",round(myerr, digits = 5), 
@@ -387,7 +404,11 @@ plot.model.results <- function(y_pred, y_true, title){
 # Plotting the results of the models
 for (model.name in names(list_preds)){
   y_pred <- list_preds[[model.name]]
-  plot.model.results(y_pred, Yh, model.name)
+  if (x_axis=="DOS"){x=Yh}
+  if (x_axis=="EGA"){x=EGA}
+  plot.model.results(y_pred[preterm_rows], x[preterm_rows], paste0(model.name, " on preterm"), x_axis)
+  plot.model.results(y_pred[-preterm_rows], x[-preterm_rows], paste0(model.name, " on term"), x_axis)
+  plot.model.results(y_pred, x, paste0(model.name, " on all"), x_axis)
 }
 ```
 
@@ -411,6 +432,7 @@ for (drug in unique(all.simulated.data$drug)){
 }
 head(simulated.data.predictions)
 ```
+
 Filtering the samples corresponding to DOS between DOS.inf and DOS.sup days
 
 ```{r}
@@ -424,11 +446,13 @@ Filtering the samples corresponding to DOS between DOS.inf and DOS.sup days
 #DOS.inf <- -84
 #DOS.sup <- -70
 # Adaptive.Lasso (prop) GOOD+
-DOS.inf <- -81
-DOS.sup <- -73
+#DOS.inf <- -81
+#DOS.sup <- -73
 # ElasticNet (prop) GOOD+
-#DOS.inf <- -83
-#DOS.sup <- -70
+DOS.inf <- -83
+DOS.sup <- -70
+DOS.inf <- -120
+DOS.sup <- -60
 # Random.Forest (prop) GOOD-
 #DOS.inf <- -82
 #DOS.sup <- -70
@@ -498,7 +522,7 @@ for (i in seq(1, length(cols))){
   # Collecting all the absolute values of the coefficients of the AdaLASSO
   coefs <- c()
   for (iter in seq(prdC)){
-    coefs[iter] <- abs(prdC[[iter]]$alasso_coef[i])
+    coefs[iter] <- abs(prdC[[iter]]$EN_coef[i])
   }
   # Mean of the coefficients
   mean_abs_coef <- mean(coefs)
@@ -511,6 +535,7 @@ for (i in seq(1, length(cols))){
                                     stringsAsFactors = FALSE))
 }
 feature.index <- feature.index %>% arrange(desc(model_index))
+feature.index
 ```
 
 Saving feature.index
