@@ -3,10 +3,10 @@ title: "Drug effect tensors"
 output: html_notebook
 ---
 
-Here we are building tensors for each drug to simulate the effect of a drug at IC50 on a given sample.
+Here we are building tensors for each drug and each concentration to simulate the effect of a drug on a given sample.
 The asumptions are:
-1 - the effect at IC50 is reached between the concentration 0 (DMSO) and the maximum concentration that is tested in the study
-2 - the linear models that were built to model the effect of a drug on a given feature is well enough representation of the effect of the drug
+1 - the individual sigmoids represent the drug effect on the individual level
+2 - the median sigmoids represent an overall effect of the drug
 3 - the effect of the drug doesn't depend on the time it is applied to the pregnant woman
 
 ## Paths
@@ -19,8 +19,17 @@ my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
 
 ```{r}
 setwd(paste0(my_path,"/Rscripts"))
-OOL_path=paste0(my_path,"/Onset of Labor csv")
-drug_assay_path=paste0(my_path,"/Drug assay csv")
+OOL_path=paste0(my_path,"/Onset of Labor data")
+drug_assay_path=paste0(my_path,"/Drug assay data")
+out_path=paste0(drug_assay_path, "/Drug effect tensors")
+plot_path=paste0(my_path, "/Plots/Drug effect tensors")
+```
+
+Creating directories for the outputs
+
+```{r}
+if(!file.exists(out_path)){dir.create(out_path, recursive=TRUE)}
+if(!file.exists(plot_path)){dir.create(plot_path, recursive=TRUE)}
 ```
 
 ## Libraries
@@ -31,6 +40,7 @@ library(tidyr)
 library(tibble)
 library(ggplot2)
 library(gridExtra)
+library(grid)
 ```
 
 ## Drug effect tensors
@@ -38,127 +48,154 @@ library(gridExtra)
 For a given drug, the drug effect tensor is a dataframe with two columns :
 1 - the name of the features
 2 - the effect of the drug on the feature which going to be calculated as follow
-$$effect_{i,j} \: = \: \alpha(scale_{DrugAssay->OOL}(f_{i,j}(C_{max,j})) - scale_{DrugAssay->OOL}(f_{i,j}(0)))$$
-where $\alpha=1/2$, $f_{i,j}$ is the the linear model built on the medians of feature i when exposed to drug j, $(C_{max,j})$ is the maximum drug concentration tested for drug j, $scale_{DrugAssay->OOL}()$ transform values from the scale of the Drug assay study to the scale of the OOL study.
+$$effect_{i,j,k} \: = z^{-1}_{OOL,i}(z_{DA,i}(\sigma^p_{i,j}(C_{k})) - z^{-1}_{OOL,i}(z_{DA,i}(\sigma^p_{i,j}(0)) \: = \:  (\sigma^p_{i,j}(C_{k}) - \sigma^p_{i,j}(0)) \frac{\Sigma_{OOL,i}}{\Sigma_{DA,i}}$$
+where $\sigma^p_{i,j}$ is the the sigmoid function built on feature i when exposed to drug j for patient p ($p \in \{1, 2, 3, 4, median\}$), $(C_{k})$ is the drug concentration tested for which we calculate the effect ($k \in \{1, 10, 100, 1000\}$), $z_{DA,i}()$ is the z scoring function on the drug assay data for feature i and $z^-1_{OOL,i}()$ is the inverted z scoring function on the OOL data for feature i, $\Sigma_{OOL,i}$ is the standard deviation of the OOL values for feature i and $\Sigma_{DA,i}$ is the standard deviation of the drug assay values for feature i.
 
-Importing linear models and data
+Importing sigmoid functions and data
 
 ```{r}
 # MedianDoseresponse
-load(paste0(drug_assay_path, "/median pen dose response with scales.rda"))
+load(paste0(drug_assay_path, "/Preprocessed Data/median pen dose response with scales.rda"))
 # AllPenDoseresponse
-load(paste0(drug_assay_path, "/all pen dose response with scales.rda"))
-# pseudo_log10.median.linear.model
-load(paste0(drug_assay_path,"/pseudo_log10 median linear models.rda"))
+load(paste0(drug_assay_path, "/Preprocessed Data/all pen dose response with scales.rda"))
+# hand.log10_1.median.model
+load(paste0(drug_assay_path,"/Sigmoid functions/log10_1 hand median models.rda"))
+# hand.log10_1.individual.model
+load(paste0(drug_assay_path,"/Sigmoid functions/log10_1 hand individual models.rda"))
+# hand.log10_1.model
+hand.log10_1.model <- rbind(hand.log10_1.individual.model, hand.log10_1.median.model)
 # Removing the datapoints that are post partum
-OOL_data <- read.csv(paste0(OOL_path, "/immunome_noEGA_DOS_pen_OOL.csv"), row.names = 1) %>% 
+OOL_data <- read.csv(paste0(OOL_path, "/Preprocessed Data/immunome_noEGA_DOS_pen_OOL.csv"), row.names = 1) %>% 
               filter(DOS <= 0)
+# Getting the samples where DOS is between -94 and -74 to get a local distribution of the values around -84 days
+local_OOL_data <- OOL_data %>% filter((DOS <= -74) & (DOS >= -94))
 ```
 
 Tensors
 
-(First attempt of drug tensor : with the a vlue to translate the whole dataset... not showing something great : all the drugs seem to accelerate pregnancy)
-
 ```{r}
-# Initializing an neutral dataframe with Drugs as columns and features as rows
-type <- "proportional" # or "constant"
-Drugs <- unique(MedianDoseresponse$drug)
-features <- unique(MedianDoseresponse$feature)
-drug.effect.tensor <- data.frame(matrix(0, nrow = length(features), ncol = length(Drugs))) %>%
-                        `rownames<-`(features) %>%
-                        `colnames<-`(Drugs)
+# Lists of drugs and features
+Drugs <- unique(AllPenDoseresponse$drug)
+features <- unique(AllPenDoseresponse$feature)
 
-# Gathering the maximum concentrations for each drug,feature combination
-C_max <- MedianDoseresponse %>%
-          group_by(feature, drug) %>%
-          summarize(Cmax = max(pseudo_log_dose)) %>%
-          select(feature, drug, Cmax)
+# Sigmoid function we want to fit
+sigmoid_function <- function(x, b, c, d, e) {
+  c + (d - c) / (1 + exp(-b * (x - e)))
+}
+
+# Initializing the list containing all the tensors
+tensor_initialization <- data.frame(matrix(0, nrow=length(features), ncol=length(Drugs), dimnames=list(features, Drugs)), check.names = FALSE)
+
+list_concentration_tensor_initialization <- list(# tensor for concentration 10^0=1
+                                                 tensor_initialization, 
+                                                 # tensor for concentration 10^1=2
+                                                 tensor_initialization, 
+                                                 # tensor for concentration 10^2=3
+                                                 tensor_initialization, 
+                                                 # tensor for concentration 10^3=4
+                                                 tensor_initialization) 
+
+drug.effect.tensors <- list(# list of tensors for patient 1
+                            "ID_1"=list_concentration_tensor_initialization, 
+                            # list of tensors for patient 2
+                            "ID_2"=list_concentration_tensor_initialization, 
+                            # list of tensors for patient 3
+                            "ID_3"=list_concentration_tensor_initialization, 
+                            # list of tensors for patient 4
+                            "ID_4"=list_concentration_tensor_initialization, 
+                            # list of tensors for median values
+                            "ID_median"=list_concentration_tensor_initialization) 
 
 # Progress bar
-pb <- txtProgressBar(min = 0, max = length(Drugs)*length(features), style = 3)
+pb <- txtProgressBar(min = 0, max = 5*4*length(Drugs)*length(features), style = 3)
 i <- 0
 
-# Filling the drug.effect.tensor with their actual values
-for (drug.name in colnames(drug.effect.tensor)){
-  for (feature.name in rownames(drug.effect.tensor)){
-    # Progress bar
-    setTxtProgressBar(pb, i)
-    # Getting the model
-    model <- pseudo_log10.median.linear.model[(pseudo_log10.median.linear.model$drug==drug.name) &
-                                            (pseudo_log10.median.linear.model$feature==feature.name),]$model[[1]]
-    # Getting the maximum concentration
-    cmax <- C_max[(C_max$drug==drug.name) & (C_max$feature==feature.name),]$Cmax
-    # Predicting y0 and ymax
-    ## When we don't have a model 
-    if (class(model) == "list"){
-      y <- NA
-    ## When we actually have a model
-    }else{
-      y <- predict(model, data.frame(dose=c(0, cmax)))
-      # Scale transform
-      if (type=="constant"){
-        drug_assay_values <- c(y, AllPenDoseresponse[AllPenDoseresponse$feature==feature.name,]$value)
-        OOL_values <- OOL_data[,feature.name]
-        z_scores <- scale(drug_assay_values)
-        OOL_mean <- mean(OOL_values)
-        OOL_sd <- sd(OOL_values)
-        scaled_drug_assay_values <- OOL_sd*z_scores + OOL_mean
-        y <- c(scaled_drug_assay_values[[1]], scaled_drug_assay_values[[2]])
+# Filling the drug.effect.tensor with effect_i,j,k
+for (target_drug in Drugs){
+  for (target_feature in features){
+    
+    # Getting the specific data from drug assay study for the specific drug, feature combination
+    individual_data <- AllPenDoseresponse %>% dplyr::filter(feature==target_feature, drug==target_drug)
+    median_data <- MedianDoseresponse %>% dplyr::filter(feature==target_feature, drug==target_drug) %>% 
+                        dplyr::mutate(ID="median") %>% 
+                        dplyr::rename(value=median_value)
+    drug_assay_value <- rbind(individual_data, median_data)$value
+    # Getting the specific data from OOL study for the specific drug, feature combination
+    onset_of_labor_value <- local_OOL_data[,target_feature]
+    # Getting the mean and standard deviations of the datasets to apply z-scoring
+    sd_DA <- sd(drug_assay_value, na.rm=T)
+    sd_OOL <- sd(onset_of_labor_value, na.rm=T)
+    
+    # Calculating the effect of target_drug on target_feature for each patient (and median) and for each concentration
+    for (id in c(1, 2, 3, 4, "median")){
+      for (c_k in 0:3){
+        # Progress bar
+        setTxtProgressBar(pb, i)
+        # Rescaling the concentration
+        C_k <- log10(1 + 10^c_k)
+        # Getting the model
+        model <- hand.log10_1.model[(hand.log10_1.model$drug==target_drug) &
+                                    (hand.log10_1.model$feature==target_feature) &
+                                    (hand.log10_1.model$ID==id),]
+        # Calculating sigma(0) and sigma(Ck)
+        sigma0 <- sigmoid_function(0, model$b, model$c, model$d, model$e)
+        sigmaCk <- sigmoid_function(C_k, model$b, model$c, model$d, model$e)
+        effect <- ifelse(sd_DA==0, 0, (sigmaCk - sigma0)*sd_OOL/sd_DA)
+        # Adding the effect to the tensor
+        drug.effect.tensors[[paste0("ID_", id)]][[c_k+1]][target_feature, target_drug] <- ifelse(length(effect)==0, NA, effect)
+        # Incrementation for progress bar
+        i <- i + 1
       }
     }
-    # Adding the effect to the tensor
-    drug.effect.tensor[feature.name, drug.name] <- ifelse(any(is.na(y)), 0, 
-                                                          ifelse(type=="constant",(y[[2]] - y[[1]])/2, (y[[2]] - y[[1]])/(2*max(abs(y)))))
-    # Incrementation for progress bar
-    i <- i + 1
   }
 }
+
+# Saving the drug effect tensors
+save(drug.effect.tensors, file=paste0(out_path, "/drug effect tensors.rda"))
 ```
+
+**Note :** Iopamidol for patient 2 was removed from the samples which is why the tensors for this drug and patient is filled with NA values.
 
 ## Effect on the OOL data
 
 Importing the data
 
 ```{r}
-# Timepoints
-DOS <- OOL_data$DOS
+# drug.effect.tensors
+load(paste0(out_path, "/drug effect tensors.rda"))
 
 # Keeping a copy of OOL_data
 original.OOL_data <- OOL_data
 
 # Removing DOS from OOL_data since already stored
-OOL_data <- select(OOL_data, -DOS)
+OOL_data <- dplyr::select(OOL_data, -DOS)
+
+# Timepoints
+DOS <- original.OOL_data$DOS
 ```
 
 Function building and applying drug effect matrix on the OOL_data
 
 ```{r}
-apply.effect.matrix <- function(target_drug, type="proportional"){
+apply.effect.matrix <- function(target_drug, c_k, centroid_id="median"){
+  # Getting the specific tensor to apply
+  tensor <- drug.effect.tensors[[paste0("ID_", centroid_id)]][[c_k]][,target_drug]
   # Creating a dataframe similar in shape to OOL_data with the drug effect as values instead of the actual values of the feature
-  effect.matrix <- data.frame(matrix(drug.effect.tensor[,target_drug], 
+  effect.matrix <- data.frame(matrix(tensor, 
                                      ncol = length(rownames(OOL_data)), 
-                                     nrow = nrow(drug.effect.tensor),
+                                     nrow = nrow(tensor),
                                      dimnames = list(rownames(drug.effect.tensor), rownames(OOL_data)))) %>%
                     rbind(data.frame(matrix(0,
-                                            nrow = ncol(OOL_data) - nrow(drug.effect.tensor),
+                                            nrow = ncol(OOL_data) - nrow(tensor),
                                             ncol = length(rownames(OOL_data)),
-                                            dimnames = list(setdiff(colnames(OOL_data), rownames(drug.effect.tensor)), 
+                                            dimnames = list(setdiff(colnames(OOL_data), rownames(tensor)), 
                                                             rownames(OOL_data))))) %>%
                     t() %>%
                     as.data.frame() %>%
-                    select(all_of(colnames(OOL_data)))
+                    dplyr::select(all_of(colnames(OOL_data)))
   
-  if (type=="proportional"){
-    # Depending on wheter the OOL data is positive or negative we add or subtract the absolute change
-    effect.matrix <- 1 + sign(OOL_data)*effect.matrix
-    # Applying the effect.matrix to the OOL_data
-    return(effect.matrix*OOL_data)
-  }
-  if (type=="constant"){
     # Applying the effect.matrix to the OOL_data
     return(effect.matrix + OOL_data)
-  }
-  print("Type not recognized")
 }
 ```
 
@@ -178,94 +215,232 @@ for (target_drug in colnames(drug.effect.tensor)){
   all.simulated.data <- rbind(all.simulated.data, simulated.OOL)
 }
 all.simulated.data <- pivot_wider(all.simulated.data, names_from="feature", values_from="value")
+
+# Creating a new directory for simulated data
+new_dir <- paste0(OOL_path, "/Simulated Data")
+if(!file.exists(new_dir)){dir.create(new_dir, recursive=TRUE)}
+
 # Saving the stimulated data
-save(all.simulated.data, file=paste0(OOL_path, "/immunome_noEGA_OOL_with_drugs.rda"))
+save(all.simulated.data, file=paste0(new_dir, "/immunome_noEGA_OOL_with_drugs.rda"))
 ```
 
-## Visualization
+## Visualization of drug tensor
 
-Feature of importance : we import the feature index and look at the features with model_index > 0.
-
-```{r}
-# feature.index
-load(paste0(OOL_path, "/feature_index.rda"))
-
-# List of the features of interest
-feature_list <- feature.index[(feature.index$model_index > 0) & (!is.na(feature.index$model_index)), "feature"]
-```
-
-Loading OOL models for the plot
+Function extracting a specific drug tensor with the coordinates of the points to appear on the plot.
 
 ```{r}
-# Loading the models for the plot
-df_sum <- read.csv(paste0(OOL_path, "/pen_classification_curves_cytof.csv"))
-# df_models
-load(paste0(OOL_path, "/pen_model_curves_cytof.rda"))
-```
-
-Function creating and saving the plots to visualize the simulated drug effect
-
-```{r}
-plot.drug.effect <- function(target_drug, OOL_data.with.drug.effect){
-  plots <- list()
-  for (target_feature in feature_list) {
-    coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
-    
-    # building the predictions
-    y <- OOL_data[, target_feature]
-    intercept <- coefs[['(Intercept)']]
-    if (length(coefs) == 3){ # quadratic model
-      a <- coefs[['DOS2']]
-      b <- coefs[['DOS']]
-      y_pred <- intercept + b * DOS + a * DOS^2
-    }
-    else{ # length(coefs) == 2, linear model
-      slope <- coefs[['DOS']]
-      y_pred <- intercept + slope * DOS
-    }
-    
-    df <- data.frame(x = DOS, y = y, y_pred = y_pred)
-    pval <- df_sum[df_sum$cytof == target_feature,]$pval
-    
-    # Adding the points with the drug effect
-    df2 <- data.frame(x = DOS, y = OOL_data.with.drug.effect[, target_feature])
-    
-    # Plot
-    plot <- ggplot(df, aes(x = x, y = y, color="without")) +
-        geom_point(size = 1, na.rm = TRUE) +
-        geom_point(data = df2, aes(x = x, y = y, color="with"), size = 1, na.rm = TRUE) +
-        geom_line(aes(y = y_pred), color = "red") +
-        ggtitle(paste(target_feature, pval, sep=",\np = ")) +
-        xlab(NULL) +  # Remove x-axis label
-        ylab(NULL) +  # Remove y-axis label
-        theme(plot.title = element_text(size = 12), 
-              legend.position = "bottom", 
-              legend.text = element_text(size = 8),
-              legend.title = element_text(size = 8),
-              legend.margin = margin(-10, 0, 0, 0)) +
-        scale_color_manual(name=paste(target_drug, 'treatment'), breaks=c("without", "with"),
-                           values=c("without"='blue', "with"='green'))
-  
-    plots[[target_feature]] <- plot
-  }
-  
-  # Saving the plots
-  pdf(paste(OOL_path, "/plots/best_features_with_", target_drug, "_effect.pdf", sep=""))
-  for (i in 0:(ceiling(length(plots)/4)-1)){
-    grid.arrange(grobs = plots[(4*i + 1):min(length(plots),(4*i + 4))], nrow = 2, ncol = 2)
-  }
-  dev.off()
-}
-
-```
-
-Plotting
-
-```{r}
-for (target_drug in colnames(drug.effect.tensor)){
-  plot.drug.effect(target_drug, apply.effect.matrix(target_drug))
+drug.tensor <- function(id, target_drug, c_k){
+  return(dplyr::select(drug.effect.tensors[[id]][[c_k]], target_drug)  %>%
+         rownames_to_column("feature") %>%
+         rename(effect=target_drug) %>%
+         dplyr::mutate(# Retrieving the separation : population, reagent, stimulation
+                       population = sub("^(.*?)_.*", "\\1", as.character(feature)),
+                       reagent = sub(".*?_(.*?)_.*", "\\1", as.character(feature)),
+                       stimulation = sub(".*_.*_(.*)", "\\1", as.character(feature)),
+                       # Coordinates for the plot of the reagents
+                       ## STAT first column
+                       x = ifelse(grepl("STAT", reagent), 1.5, 0),
+                       ## STAT1 (1,4)
+                       y = ifelse(reagent == "STAT1", 4, 0),
+                       ## STAT3 (1,3)
+                       y = ifelse(reagent == "STAT3", 3, y),
+                       ## STAT5 (1,2)
+                       y = ifelse(reagent == "STAT5", 2, y),
+                       ## STAT6 (1,1)
+                       y = ifelse(reagent == "STAT6", 1, y),
+                       ## NFkB (3,4)
+                       x = ifelse(reagent == "NFkB", 3, x),
+                       y = ifelse(reagent == "NFkB", 4, y),
+                       ## ERK (3,3)
+                       x = ifelse(reagent == "ERK", 3, x),
+                       y = ifelse(reagent == "ERK", 3, y),
+                       ## S6 (3,2)
+                       x = ifelse(reagent == "S6", 3, x),
+                       y = ifelse(reagent == "S6", 2, y),
+                       ## MAPKAPK2 (3,1)
+                       x = ifelse(reagent == "MAPKAPK2", 3, x),
+                       y = ifelse(reagent == "MAPKAPK2", 1, y),
+                       ## IkB (4,4)
+                       x = ifelse(reagent == "IkB", 4, x),
+                       y = ifelse(reagent == "IkB", 4, y),
+                       ## CREB (4,3)
+                       x = ifelse(reagent == "CREB", 4, x),
+                       y = ifelse(reagent == "CREB", 3, y),
+                       ## p38 (4,2)
+                       x = ifelse(reagent == "p38", 4, x),
+                       y = ifelse(reagent == "p38", 2, y)))
 }
 ```
+
+Parameters of the test drug tensor (for the legend)
+
+```{r}
+id = "ID_1" # ID_median or ID_1 or ID_2 or ID_3 or ID_4
+c_k = 4 # 1 or 2 or 3 or 4
+target_drug = "Lansoprazole" # Cefotaxime or Lansoprazole or Iopamidol or Iohexol or Benzylpenicillin or Chlorthalidone or Rifabutin or Iodixanol or Metformin or Folic acid or Clotrimazole or Maprotiline or Progesterone or Pravastatin or Methylpredonisolone
+
+test.drug.tensor <- drug.tensor(id, target_drug, c_k)
+```
+
+Here we are doing one of the 100 plots that are going to be build for each drug so that we can plot the legend as well. Each node represent a reagent and its color is indicating how much it is inhibited or activated by the drug at the given concentration. 
+
+```{r}
+# Example of settings for the plot
+example_population <- "CD4negCD8negTcells"
+example_stimulation <- "unstim"
+
+# Subset
+df <- test.drug.tensor[test.drug.tensor$population == example_population &
+                       test.drug.tensor$stimulation == example_stimulation,]
+# Setting values higher or lower to +/-1 to +/-1
+df[abs(df$effect) > 1,"effect"] <- sign(df[abs(df$effect) > 1,"effect"])
+
+# Plot
+p <- ggplot(df, aes(x = x, y = y)) +
+  # Nodes color
+  geom_point(aes(fill = effect), size=3, shape = 21) +
+  # Name of the nodes
+  geom_text(aes(label = reagent), vjust = -1.5, hjust = 0.5, size = 5, color = "black") +
+  # Scale of the color of the nodes
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1., 1)) +
+  # Removing the ticks from x and y axis
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank()) +
+  # Axis
+  scale_x_continuous(limits = c(0.5, 5), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0.5, 4.5), expand = c(0., 0.)) +
+  coord_fixed() +
+  # Lables
+  labs(x = NULL, y = NULL)
+
+# Saving the plot
+ggsave(paste0(plot_path, "/legend_grid_effect_plot.png"), plot = p, width = 10, height = 8)
+```
+
+Plotting a grid composed of subplots like the one above for every population and avery stimulation and each drug
+
+```{r}
+# Useful variables (we rewrite them because the order is important for the figures)
+stimulations <- c("unstim", "GMCSF", "IFNa", "IL246", "LPS")
+populations <- c("Bcells", "CD4Tcm", "CD4Teff", "CD4Tem", "CD4Tnaive", "CD4negCD8negTcells", "CD56hiCD16negNK", "CD56loCD16posNK", "CD8Tcm", "CD8Teff", "CD8Tem", "CD8Tnaive", "Granulocytes", "MDSCs", "NKT", "Tregs", "intMCs", "mDCs", "ncMCs", "pDCs")
+Drugs <- c("Cefotaxime", "Lansoprazole", "Iopamidol", "Iohexol", "Benzylpenicillin", "Chlorthalidone", "Rifabutin", "Iodixanol", "Metformin", "Folic acid", "Clotrimazole", "Maprotiline", "Progesterone", "Pravastatin", "Methylpredonisolone")
+ids <- c("ID_median", "ID_1", "ID_2", "ID_3", "ID_4")
+concentrations <- 1:4
+
+# Function plotting one grid effect for a given drug, concentration and patient ID (or median)
+plot_drug_grid_effect <- function(target_drug, id, c_k){
+  # Getting the tensor
+  target.drug.tensor <- drug.tensor(id, target_drug, c_k)
+  plot_list <- list()
+  # Iterate over the rows and columns to create the plots
+  pop_title <- TRUE
+  for (stim in stimulations) {
+    stim_title <- TRUE
+    for (population in populations) {
+      # Filter the data for the current population and stimulation
+      subset_df <- target.drug.tensor[target.drug.tensor$population == population &
+                                      target.drug.tensor$stimulation==stim &
+                                      complete.cases(target.drug.tensor),]
+      # Setting values higher or lower to +/-1 to +/-1
+      subset_df[abs(subset_df$effect) > 1,"effect"] <- sign(subset_df[abs(subset_df$effect) > 1,"effect"])
+      
+      # Subplot for the current population and stimulation
+      p <- ggplot(subset_df, aes(x = x/25, y = y/25)) +
+        # Nodes color
+        geom_point(aes(fill = effect), size=7.5, shape = 21) +
+        # Scale of the color of the nodes
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1, 1)) +
+        # Adding a border to the figure if there are features of interest inside
+        geom_rect(aes(xmin = 0.04, xmax = 0.18, ymin = 0.02, ymax = 0.18),
+                  fill = NA,
+                  color = "black",
+                  linetype = "solid",
+                  linewidth =  0.6) +
+        # Removing legends and adjusting size and margins
+        theme(legend.position = "none",
+              plot.title = element_text(size = 6, margin = margin(r = 0)),
+              #panel.background = element_rect(fill = "lightgrey"),
+              panel.background = element_blank(),
+              #panel.grid = element_blank(),
+              axis.text.x = element_blank(),
+              axis.text.y = element_blank(),
+              axis.ticks.x = element_blank(),
+              axis.ticks.y = element_blank(),
+              axis.title.y = element_text(size = 6, margin = margin(r = -2)),
+              axis.title.x = element_blank(),
+              plot.margin = unit(c(0., 0., 0., 0.), "cm")) +  
+        # Axis
+        scale_x_continuous(limits = c(0.04, 0.18), expand = c(0, 0)) +
+        scale_y_continuous(limits = c(0.02, 0.18), expand = c(0., 0.)) +
+        coord_fixed()
+      
+      # Labels (y label only appear for the first column of subplot with the name of the stim)
+      if (stim_title){
+        p <- p + labs(x = NULL, y = stim)
+      }else{
+        p <- p + labs(x = NULL, y = "")
+      }
+
+      # Title (only appear for the first row of subplots with the name of the population)
+      if (pop_title){
+        p <- p + ggtitle(population)
+      }else{
+        p <- p + ggtitle("")
+      }
+
+      # Store the plot in the plot list
+      plot_list[[length(plot_list) + 1]] <- p
+      stim_title <- FALSE
+    }
+    pop_title <- FALSE
+  }
+  
+  # Creating the grid plot
+  grid_arrange <- grid.arrange(grobs = plot_list,
+                               ncol = length(populations),
+                               nrow = length(stimulations))
+  # Adding a title to the grid plot
+  title <- textGrob(paste(target_drug, "Dose", 10^(c_k-1), ifelse(id=="ID_median", "median effect", paste0("on patient ", sub(".*_", "", id))), sep=" "), 
+                    gp = gpar(fontsize = 16, fontface = "bold"))
+  layout <- rbind(c(1), c(2))
+  arranged_plots <- arrangeGrob(title, grid_arrange, layout_matrix = layout, heights = c(1, 9))
+  
+  return(arranged_plots)
+}
+```
+
+Creating the figures for all the Id, drug, concentrations combinations
+
+```{r}
+# Creating and saving the figures in pdf files
+for (id in ids) {
+  # Creating the directory
+  directory_path <- paste0(plot_path, "/", ifelse(id=="ID_median","Median effect", paste0("Patient ", sub(".*_", "", id), " effect")))
+  if (!dir.exists(directory_path)) {
+    dir.create(directory_path, recursive = TRUE)
+  }
+  # Creating one file per drug
+  for (target_drug in Drugs){
+    # Creating the plots for all the concentrations
+    list_plots <- list()
+    for (c_k in concentrations){
+      list_plots[[c_k]] <- plot_drug_grid_effect(target_drug, id, c_k)
+    }
+    pdf(paste(directory_path, "/", target_drug, "_grid_effect_plots.pdf", sep=""), width=20.4, height=6.4)
+    for (c_k in concentrations){
+      grid.draw(list_plots[[c_k]])
+      grid.newpage()
+    }
+    dev.off()
+  }
+}
+```
+
+
+
+
 
 
 

@@ -13,9 +13,15 @@ my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
 
 ```{r}
 setwd(paste0(my_path,"/Rscripts"))
-funct_path=paste0(my_path,"/Drug assay csv/Drug assay ID1-4re-normalized&barcorded - Statistics - ID2P3 removed.csv")
-out_path=paste0(my_path,"/Drug assay csv")
-path_to_penalization_file = paste0(out_path, "/penalization matrix drug assay.xlsx")
+funct_path=paste0(my_path,"/Drug assay data/Drug Assay Project Initial Data/Drug assay ID1-4re-normalized&barcorded - Statistics - ID2P3 removed.csv")
+path_to_penalization_file = paste0(my_path, "/Drug assay data/Drug Assay Project Initial Data/penalization matrix drug assay.xlsx")
+out_path=paste0(my_path,"/Drug assay data/Preprocessed Data")
+```
+
+Creating directory to store the preprocessed data
+
+```{r}
+if (!file.exists(out_path)){dir.create(out_path)}
 ```
 
 ## Libraries
@@ -67,7 +73,7 @@ Drugs <- c(
 # We associate the name of the drug corresponding to its plate number in MyData
 for (i in seq(1, 15)){
     MyData = MyData %>%
-    mutate(Drug =  ifelse(Plate == i, Drugs[i], Drug))
+    dplyr::mutate(Drug =  ifelse(Plate == i, Drugs[i], Drug))
 }
 
 # Removing the Plate column
@@ -79,26 +85,26 @@ We can do that because a drug has either been measured in $n g$ or $\mu g$.
 
 ```{r}
 MyData = MyData %>%
-  mutate(Dose =  ifelse(Dose %in% c("1ug", "1ng"), "1" , Dose))
+  dplyr::mutate(Dose =  ifelse(Dose %in% c("1ug", "1ng"), "1" , Dose))
 MyData = MyData %>%
-  mutate(Dose =  ifelse(Dose %in% c("10ug","10ng"), "10" , Dose))
+  dplyr::mutate(Dose =  ifelse(Dose %in% c("10ug","10ng"), "10" , Dose))
 MyData = MyData %>%
-  mutate(Dose =  ifelse(Dose %in% c("100ug", "100ng"), "100" , Dose))
+  dplyr::mutate(Dose =  ifelse(Dose %in% c("100ug", "100ng"), "100" , Dose))
 MyData = MyData %>%
-  mutate(Dose =  ifelse(Dose %in% c("1000ug", "1000ng"), "1000" , Dose))
+  dplyr::mutate(Dose =  ifelse(Dose %in% c("1000ug", "1000ng"), "1000" , Dose))
 MyData = MyData %>%
-  mutate(Dose =  ifelse(Dose %in% c("0.50%", "0.5%"), "0", Dose))
+  dplyr::mutate(Dose =  ifelse(Dose %in% c("0.50%", "0.5%"), "0", Dose))
 ```
 
 Renaming the columns and two of the stimulation for convenience.
 
 ```{r}
 MyData = MyData %>% 
-            rename("dose" = "Dose",
-                   "drug" = "Drug",
-                   "stimulation" = "Stims") %>%
-            mutate(stimulation = gsub("GM-CSF", "GMCSF", stimulation),
-                   stimulation = gsub("Unstim", "unstim", stimulation))
+            dplyr::rename("dose" = "Dose",
+                          "drug" = "Drug",
+                          "stimulation" = "Stims") %>%
+            dplyr::mutate(stimulation = gsub("GM-CSF", "GMCSF", stimulation),
+                          stimulation = gsub("Unstim", "unstim", stimulation))
 ```
 
 ```{r}
@@ -115,15 +121,15 @@ metadata = setdiff(colnames(MyData), c("dose", "stimulation", "median"))
 
 for(drug.name in unique(MyData$drug)){
   # Filtering the data with a specific drug
-  MyData_drug = MyData %>% filter(drug == drug.name) %>%
-                  mutate(conditions=paste0(stimulation, "_", dose, sep=""))
+  MyData_drug = MyData %>% dplyr::filter(drug == drug.name) %>%
+                  dplyr::mutate(conditions=paste0(stimulation, "_", dose, sep=""))
   # Getting the stims for this drug
   conditions = unique(MyData_drug$conditions)
   # asinh transformation
-  MyData_drug = MyData_drug %>% mutate(feature = asinh(median/5))
+  MyData_drug = MyData_drug %>% dplyr::mutate(feature = asinh(median/5))
   # Removing the median column and calculating Stimulated - Unstimulated_0
   MyData_drug = MyData_drug[, names(MyData_drug) != "median"] %>%
-      select(-c(stimulation, dose)) %>%
+      dplyr::select(-c(stimulation, dose)) %>%
       pivot_wider(names_from = conditions, values_from = feature)
   
   MyData_drug["unstim_-1"] = MyData_drug["unstim_0"] # Saving the asinh transform of unstim_0
@@ -134,9 +140,9 @@ for(drug.name in unique(MyData$drug)){
   
   MyData_fin = MyData_drug %>% 
                   pivot_longer(-all_of(metadata), names_to="conditions",values_to="feature") %>%
-                  mutate(dose=as.double(sub(".*_(.*)", "\\1", conditions)),
-                         stimulation=sub("_.*", "", conditions)) %>%
-                  select(-conditions)
+                  dplyr::mutate(dose=as.double(sub(".*_(.*)", "\\1", conditions)),
+                                stimulation=sub("_.*", "", conditions)) %>%
+                  dplyr::select(-conditions)
 
   # Adding the new calculated features to the final dataset
   final_data = rbind(final_data, MyData_fin)
@@ -157,11 +163,11 @@ This is function taking a penalization matrix and the name of the stimulation as
 penalization_preprocessing <- function(penalization_matrix, stim.name){
   penalization_matrix <- penalization_matrix %>%
   `colnames<-`(c("population", colnames(penalization_matrix)[-1])) %>%
-  mutate(population = as.factor(population)) %>%
+  dplyr::mutate(population = as.factor(population)) %>%
   gather("protein", "penalization", -population) %>% 
-  mutate(feature = paste(population, "_", protein, "_", stim.name, sep="")) %>% 
-  filter(penalization == 0) %>%
-  mutate(feature = sub("_[^_]*_", "_", feature))
+  dplyr::mutate(feature = paste(population, "_", protein, "_", stim.name, sep="")) %>% 
+  dplyr::filter(penalization == 0) %>%
+  dplyr::mutate(feature = sub("_[^_]*_", "_", feature))
 }
 ```
 
@@ -181,9 +187,9 @@ Removing penalized features from the unpenalized dataset.
 
 ```{r}
 pen_final_data <- final_data %>%
-                    mutate(feature.name = paste(population, "_", reagent, "_", stimulation, sep="")) %>%
-                    filter(!feature.name %in% discard) %>%
-                    select(-feature.name)
+                    dplyr::mutate(feature.name = paste(population, "_", reagent, "_", stimulation, sep="")) %>%
+                    dplyr::filter(!feature.name %in% discard) %>%
+                    dplyr::select(-feature.name)
 ```
 
 Saving penalized dataset.

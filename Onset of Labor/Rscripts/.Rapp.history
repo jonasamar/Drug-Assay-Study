@@ -1,4 +1,0 @@
-load(~/Stabl/Onset of Labor/Data/Data.rda)
-load(/Users/jonasamar/Stabl/Onset of Labor/Data/Data.rda)
-load(Users/jonasamar/Stabl/Onset of Labor/Data/Data.rda)
-load("Users/jonasamar/Stabl/Onset of Labor/Data/Data.rda")

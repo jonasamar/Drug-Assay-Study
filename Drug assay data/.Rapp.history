@@ -1,0 +1,5 @@
+load("/Users/jonasamar/Stabl/Drug Study/Drug assay csv/mixed models.RData")
+mixed.models
+mixed.model
+load("/Users/jonasamar/Stabl/Drug Study/Drug assay csv/pseudo_log10 median linear models.rda")
+ls()

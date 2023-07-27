@@ -69,25 +69,35 @@ build.sigmoid.or.linear.model <- function(data, feature.name, drug.name, id="med
       model<<-suppressMessages(lm(value ~ dose, data = data))
       class <<- "linear"
     })
-    # Check if there was an error
+    
+    # Building scores
     if (class=="sigmoid") {
       # Sigmoid model fitting was successful
-      class <- "sigmoid"
-      # Mean average pourcentage error
       coefs <- coef(model)
       preds <- sigmoid_model(data$dose, coefs[["b"]], coefs[["c"]], coefs[["d"]], coefs[["e"]])
-      MAPE <- sum(abs((data$value-preds)/max(abs(data$value)))*100)/4
-      scores <- list("MAPE"=MAPE)
+      residuals <- preds - data$value
+      rmse <- sqrt(mean(residuals^2))
+      aic <- 8 - 2*log(1/sqrt(2*pi*sum(residuals^2)/nrow(interpolated_data))*exp(-sum(residuals^2)/(2*nrow(interpolated_data))))
+      # Trying to get a pvalue when available
+      pval<-NULL
+      try_pval <- tryCatch({
+        pval<-summary(model)$coefficients[, "Pr(>|t|)"][["b"]]
+      }, error = function(e) {
+        pval<<-NA
+      })
     }
     if (class=="linear"){
       # Sigmoid model fitting was NOT successful
-      coefs <- coef(model) %>% 
-        setNames(c("Intercept", "Slope"))
-      aic <- AIC(model)
-      pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
       residuals <- residuals(model)
       rmse <- sqrt(mean(residuals^2))
-      scores <- list("aic"=aic, "pval"=pval, "rmse"=rmse)
+      aic <- AIC(model)
+      # Trying to get a pvalue when available
+      pval<-NULL
+      try_pval <- tryCatch({
+        pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
+      }, error = function(e) {
+        pval<<-NA
+      })
     }
   }else{
     # When there is only one value, the model is constant
@@ -95,7 +105,6 @@ build.sigmoid.or.linear.model <- function(data, feature.name, drug.name, id="med
     aic <- NA
     pval <- NA
     rmse <- NA
-    scores <- list("aic"=aic, "pval"=pval, "rmse"=rmse)
     class <- "constant"
   }
   # Adding new linear model to models
@@ -103,7 +112,9 @@ build.sigmoid.or.linear.model <- function(data, feature.name, drug.name, id="med
                     drug = drug.name,
                     ID=id,
                     model = I(list(model)),
-                    scores = I(list(scores)),
+                    aic=aic,
+                    rmse=rmse,
+                    pval=pval,
                     class = class,
                     stringsAsFactors = FALSE))
 }

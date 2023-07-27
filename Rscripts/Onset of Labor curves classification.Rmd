@@ -15,8 +15,17 @@ my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
 
 ```{r}
 setwd(paste0(my_path,"/Rscripts"))
-funct_path=paste0(my_path,"/Onset of Labor csv/immunome_EGA_DOS_pen_OOL.csv")
-out_path=paste0(my_path,"/Onset of Labor csv")
+OOL_path=paste0(my_path,"/Onset of Labor data")
+funct_path=paste0(OOL_path,"/Preprocessed Data/immunome_EGA_DOS_pen_OOL.csv")
+out_path=paste0(OOL_path,"/Curve classification")
+plot_path=paste0(my_path, "/Plots/Onset of Labor curve classification")
+```
+
+Creating directories for the outputs
+
+```{r}
+if(!file.exists(out_path)){dir.create(out_path, recursive = TRUE)}
+if(!file.exists(plot_path)){dir.create(plot_path, recursive = TRUE)}
 ```
 
 ## Libraries
@@ -46,14 +55,14 @@ data <- read.csv(funct_path)
 preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
 # removing the datapoints that are post partum
 if (cohort=="all"){
-  data <- data %>% filter(DOS <= 0)
+  data <- data %>% dplyr::filter(DOS <= 0)
 }
 if (cohort=="preterm"){
-  data <- data %>% filter(DOS <= 0)
+  data <- data %>% dplyr::filter(DOS <= 0)
   data <- data[apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
 }
 if (cohort=="term"){
-  data <- data %>% filter(DOS <= 0)
+  data <- data %>% dplyr::filter(DOS <= 0)
   data <- data[!apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
 }
 
@@ -167,7 +176,7 @@ Saving df_sum and df_models.
 ```{r}
 if (mode=="DOS"){
   write.csv(df_sum, paste(out_path, "/",cohort,"_pen_classification_curves_cytof.csv", sep=""))
-  save(df_models, file=paste(out_path, "/",cohort,"pen_model_curves_cytof.rda", sep=""))
+  save(df_models, file=paste(out_path, "/",cohort,"_pen_model_curves_cytof.rda", sep=""))
 }
 if (mode=="EGA"){
   write.csv(df_sum, paste(out_path, "/",cohort,"_pen_classification_curves_cytof_on_EGA.csv", sep=""))
@@ -175,9 +184,9 @@ if (mode=="EGA"){
 }
 ```
 
-## Plot of the models
+## Visualization
 
-We are going to look at the best features according to the OOL paper
+We are going to plot the best features according to the OOL paper
 
 ```{r}
 feature_list <- c("CD56loCD16posNK_STAT1_IFNa",
@@ -251,7 +260,7 @@ for (target_feature in feature_list) {
 }
 
 # Saving the plots
-pdf(paste(out_path, "/plots/best_features_plot_on_",mode,"_OOL.pdf", sep=""))
+pdf(paste(plot_path, "/best_features_plot_on_",mode,"_OOL.pdf", sep=""))
 for (i in 0:floor(length(plots)/16)){
   grid.arrange(grobs = plots[(16*i+1):min(length(plots),(16*i+16))], nrow = 4, ncol = 4)
 }
@@ -261,33 +270,35 @@ dev.off()
 Plotting term and preterm features as functions of EGA on the same figures.
 
 ```{r}
-#feature.index
-load(paste0(OOL_path, "/feature_index.rda"))
-# Looking at the features with index > 0
+# Importing OOL data
+data <- read.csv(funct_path) %>% filter(DOS <= 0)
+# feature.index
+load(paste0(OOL_path, "/Prediction model/feature_index.rda"))
+# Selecting the features with index > 0
 feature_list <- feature.index[feature.index$model_index > 0, "feature"]
 ```
 
-
 ```{r}
-# Settings
-data <- read.csv(funct_path) %>% filter(DOS <= 0)
+# Variable settings
 preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
 mode="EGA"
 EGA=data$EGA
-# preterm data, models and summary
-load(paste0(OOL_path, "/preterm_pen_model_curves_cytof_on_EGA.rda"))
+
+# Preterm data, models and summary
+load(paste0(out_path, "/preterm_pen_model_curves_cytof_on_EGA.rda"))
 df_preterm_models=df_models
-df_preterm_sum=read.csv(file=paste0(OOL_path,"/preterm_pen_classification_curves_cytof_on_EGA.csv"))
+df_preterm_sum=read.csv(file=paste0(out_path,"/preterm_pen_classification_curves_cytof_on_EGA.csv"))
 preterm_data=data[apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
 preterm_EGA=preterm_data$EGA
-# term data, models and summary
-load(paste0(OOL_path, "/term_pen_model_curves_cytof_on_EGA.rda"))
+
+# Term data, models and summary
+load(paste0(out_path, "/term_pen_model_curves_cytof_on_EGA.rda"))
 df_term_models=df_models
-df_term_sum=read.csv(file=paste0(OOL_path,"/term_pen_classification_curves_cytof_on_EGA.csv"))
+df_term_sum=read.csv(file=paste0(out_path,"/term_pen_classification_curves_cytof_on_EGA.csv"))
 term_data=data[!apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
 term_EGA=term_data$EGA
 
-#Plots
+# Plots
 plots <- list()
 for (target_feature in feature_list) {
   # PRETERM
@@ -328,20 +339,28 @@ for (target_feature in feature_list) {
   
   # Plot
   plot <- ggplot() +
-      geom_point(data=df_term_points, aes(x = x, y = y), color = "blue", size = 1, na.rm = TRUE) +
-      geom_line(data=df_preds, aes(x = x, y = y_pred_term), color = "red") +
-      geom_point(data=df_preterm_points, aes(x = x, y = y), color = "darkgreen", size = 1, na.rm = TRUE) +
-      geom_line(data=df_preds, aes(x = x, y = y_pred_preterm), color = "orange") +
-      ggtitle(paste(target_feature, "\n (red) term p-value = ",pval_term,"\n (orange) term p-value = ",pval_preterm, sep="")) +
-      xlab(NULL) +  # Remove x-axis label
-      ylab(NULL) +  # Remove y-axis label
-      theme(plot.title = element_text(size = 6))
-    
+      geom_point(data=df_term_points, aes(x = x, y = y), fill="white", shape=1, color = "grey", size = 1., na.rm = TRUE) +
+      geom_line(data=df_preds, aes(x = x, y = y_pred_term), color = "darkgreen") +
+      geom_point(data=df_preterm_points, aes(x = x, y = y), fill="white", shape=1, color = "blue", size = 1., na.rm = TRUE) +
+      geom_line(data=df_preds, aes(x = x, y = y_pred_preterm), color = "blue") +
+      theme(plot.title = element_text(size = 6),
+            panel.background = element_rect(fill = NA, color = NA),
+            plot.background = element_rect(fill = NA, color = NA),
+            axis.title.x = element_text(size = 6),
+            axis.title.y = element_text(size = 6),
+            axis.text.x = element_text(size = 6),
+            axis.text.y = element_text(size = 6),
+            axis.line.x = element_line(),
+            axis.line.y = element_line()) +
+      ggtitle(paste(target_feature, "\n (green) term p-value = ",pval_term,"\n (blue) term p-value = ",pval_preterm, sep="")) +
+      ylab("Arcsinh ratio\nover unstim signal") +
+      xlab(mode)
+
   plots[[target_feature]] <- plot
 }
 
 # Saving the plots
-pdf(paste(out_path, "/plots/best_features_plot_on_",mode,"term_vs_preterm_OOL.pdf", sep=""))
+pdf(paste(plot_path, "/best_features_plot_on_",mode,"_term_vs_preterm_OOL.pdf", sep=""), height=8, width=9)
 for (i in 0:floor(length(plots)/16)){
   grid.arrange(grobs = plots[(16*i+1):min(length(plots),(16*i+16))], nrow = 4, ncol = 4)
 }

@@ -1,0 +1,933 @@
+---
+title: "Drug assay models"
+output: html_notebook
+---
+
+Here we want to quantify the effect of the drugs on each feature. To do that, we decided to build mixed linear models on the whole data (4 patients) for each drug and each feature. We also try simple linear models on the median of the 4 patients data. We then analyzed the results of these models by calculating scores of performances and visualize the best models according to these score to see if this choice of modeling is relevant. 
+
+## Paths
+
+**Copy Paste Here the path to your Drug-Assay-Study folder**
+
+```{r}
+my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
+```
+
+```{r}
+setwd(paste0(my_path,"/Rscripts"))
+out_path=paste0(my_path,"/Drug assay csv")
+```
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(tidyselect)
+library(reshape2)
+library(lme4)
+#library(lmerTest)
+library(ggplot2)
+#library(r2glmm)
+library(sjstats)
+library(doSNOW)
+library(parallel)
+library(reticulate)
+library(aomisc)
+library(dplyr)
+library(gridExtra)
+library(grid)
+```
+
+## Building model function
+
+```{r}
+# Function which attempts to build sigmoid models on the data
+build.sigmoid.or.linear.model <- function(data, feature.name, drug.name, id="median"){
+  # Building a linear or sigmoid model only when the response is not constant (we get an error message otherwise...)
+  if (length(unique(data$value)) > 1){
+    # Generate a sequence of intermediate doses
+    intermediate_dose_0 <- lapply(1:(length(data$dose) - 1), function(i) (data$dose[i + 1] + data$dose[i])/2)
+    intermediate_dose_1 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+(data$dose[i + 1] - data$dose[i])/3)
+    intermediate_dose_2 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+2*(data$dose[i + 1] - data$dose[i])/3)
+    intermediate_dose_3 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+(data$dose[i + 1] - data$dose[i])/4)
+    intermediate_dose_4 <- lapply(1:(length(data$dose) - 1), function(i) data$dose[i]+3*(data$dose[i + 1] - data$dose[i])/4)
+    intermediate_dose <- c(unlist(intermediate_dose_0), unlist(intermediate_dose_1), unlist(intermediate_dose_2), unlist(intermediate_dose_3), unlist(intermediate_dose_4), data$dose)
+    # Interpolate the intermediate values at the intermediate doses
+    interpolated_values_0 <- lapply(1:(length(data$value) - 1), function(i) (data$value[i + 1] + data$value[i])/2)
+    interpolated_values_1 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+2*(data$value[i + 1] - data$value[i])/100)
+    interpolated_values_2 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+98*(data$value[i + 1] - data$value[i])/100)
+    interpolated_values_3 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+(data$value[i + 1] - data$value[i])/100)
+    interpolated_values_4 <- lapply(1:(length(data$value) - 1), function(i) data$value[i]+99*(data$value[i + 1] - data$value[i])/100)
+    interpolated_values <- c(unlist(interpolated_values_0), unlist(interpolated_values_1), unlist(interpolated_values_2),unlist(interpolated_values_3), unlist(interpolated_values_4), data$value)
+    # Create a data frame with the interpolated data
+    interpolated_data <- data.frame(dose = intermediate_dose, value = interpolated_values)
+    # Sort the interpolated data by dose
+    interpolated_data <- interpolated_data[order(interpolated_data$dose), ]
+    
+    # Sigmoid function we want to try to fit
+    sigmoid_model <- function(x, b, c, d, e) {
+      c + (d - c) / (1 + exp(-b * (x - e)))
+    }
+    model <- NULL
+    class <- NULL
+    # Attempt to fit the sigmoid model using nls() and fall back to a linear model
+    try_result <- tryCatch({
+      #Initilize parameters
+      gaps <- abs(diff(data$value))
+      jump <- which.max(gaps)
+      start_e=mean(c(data$dose[jump], data$dose[jump+1]))
+      start_b=sign(data$value[jump+1]-data$value[jump])
+      startp <- list(b=start_b, c=min(data$value), d=max(data$value), e=start_e)
+      # Model fitting
+      model <-nls(value ~ sigmoid_model(dose, b, c, d, e), data = interpolated_data, start=startp, algorithm = "port")
+      class <- "sigmoid"
+    }, error = function(e) {
+      model<<-suppressMessages(lm(value ~ dose, data = data))
+      class <<- "linear"
+    })
+    
+    # Building scores
+    if (class=="sigmoid") {
+      # Sigmoid model fitting was successful
+      coefs <- coef(model)
+      preds <- sigmoid_model(data$dose, coefs[["b"]], coefs[["c"]], coefs[["d"]], coefs[["e"]])
+      residuals <- preds - data$value
+      rmse <- sqrt(mean(residuals^2))
+      aic <- 8 - 2*log(1/sqrt(2*pi*sum(residuals^2)/nrow(interpolated_data))*exp(-sum(residuals^2)/(2*nrow(interpolated_data))))
+      # Trying to get a pvalue when available
+      pval<-NULL
+      try_pval <- tryCatch({
+        pval<-summary(model)$coefficients[, "Pr(>|t|)"][["b"]]
+      }, error = function(e) {
+        pval<<-NA
+      })
+      b <- coef(model)[["b"]]
+      c <- coef(model)[["c"]]
+      d <- coef(model)[["d"]]
+      e <- coef(model)[["e"]]
+      Intercept <- NA
+      slope <- NA
+    }
+    if (class=="linear"){
+      # Sigmoid model fitting was NOT successful
+      residuals <- residuals(model)
+      rmse <- sqrt(mean(residuals^2))
+      aic <- AIC(model)
+      # Trying to get a pvalue when available
+      pval<-NULL
+      try_pval <- tryCatch({
+        pval <- summary(model)$coefficients[, "Pr(>|t|)"][["dose"]]
+      }, error = function(e) {
+        pval<<-NA
+      })
+      b <- NA
+      c <- NA
+      d <- NA
+      e <- NA
+      Intercept <- coef(model)[["(Intercept)"]]
+      slope <- coef(model)[["dose"]]
+    }
+  }else{
+    # When there is only one value, the model is constant
+    model <- list(unique(data$value))
+    aic <- NA
+    pval <- NA
+    rmse <- NA
+    b <- NA
+    c <- NA
+    d <- NA
+    e <- NA
+    Intercept <- NA
+    slope <- NA
+    class <- "constant"
+  }
+  # Adding new linear model to models
+  return(data.frame(feature = feature.name,
+                     drug = drug.name,
+                     ID=id,
+                     b=b,
+                     c=c,
+                     d=d,
+                     e=e,
+                     Intercept=Intercept,
+                     slope=slope,
+                     aic=aic,
+                     rmse=rmse,
+                     pval=pval,
+                     class = class,
+                     stringsAsFactors = FALSE))
+}
+```
+
+## Individual models
+
+Importing penalized preprocessed data with the different scales.
+
+```{r}
+# AllPenDoseresponse
+load(paste0(out_path, "/all pen dose response with scales.rda"))
+```
+
+Function building a the mixed models for a given drug across the 720 features.
+
+```{r}
+build.individual.model <- function(drug.name, dataset){
+  # Create an empty data frame to store the results
+  models <- data.frame(stringsAsFactors = FALSE)
+  
+  for (feature.name in unique(dataset$feature)){
+    # Subset of the dataset 
+    Subset <- dataset %>% 
+                  filter(feature == !!feature.name) %>%
+                  filter(drug == !!drug.name)  %>%
+                  dplyr::select(c("ID", "dose", "value"))
+    for (id in unique(Subset$ID)){
+      # Subset at the individual level
+      subset <- Subset %>%
+                  filter(ID==id) %>%
+                  dplyr::select(c("ID", "dose", "value"))
+      new_model <- build.sigmoid.or.linear.model(subset,feature.name, drug.name,id)
+      # Adding new linear model to models
+      models <- rbind(models,new_model)
+    }
+  }
+  return(models)
+}
+```
+
+**log10.individual.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10 scale of the concentrations.
+
+```{r}
+# Setting the dose values to their log10 transform
+Doseresponse <- AllPenDoseresponse %>%
+                  mutate(dose = log10_dose) %>%
+                  filter(is.finite(dose))
+
+# Set up parallel backend using doParallel
+cl <- makeSOCKcluster(detectCores())
+registerDoSNOW(cl)
+
+# Create individual linear models on log10 scale
+log10.individual.model = foreach(drug.name = unique(Doseresponse$drug), 
+                                   .packages = c("tidyverse","lme4", "lmerTest","dplyr"),
+                                   .combine = rbind) %dopar% build.individual.model(drug.name, Doseresponse)
+
+
+
+
+# Saving mixed models
+save(log10.individual.model, 
+     file=paste0(out_path, "/log10 individual models.rda"))
+```
+
+**log10_1.individual.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a log10(x+1) scale of the concentrations.
+
+
+```{r}
+# Setting the dose values to their log10(x+1) transform
+Doseresponse <- AllPenDoseresponse %>%
+                  mutate(dose = log10_1_dose) %>%
+                  filter(is.finite(dose))
+
+# Set up parallel backend using doParallel
+cl <- makeSOCKcluster(detectCores())
+registerDoSNOW(cl)
+
+# Create individual linear models on log10 scale
+log10_1.individual.model = foreach(drug.name = unique(Doseresponse$drug), 
+                                   .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
+                                   .combine = rbind) %dopar% build.individual.model(drug.name, Doseresponse)
+
+# Close parallel backend
+stopCluster(cl)
+
+# Saving mixed models
+save(log10_1.individual.model, 
+     file=paste0(out_path, "/log10_1 individual models.rda"))
+```
+
+**pseudo_log10.individual.model :** dataframe containing all the informations about the mixed linear models that are built on each feature on a pseudo_log10 (=asinh(x/2)/log(10)) scale of the concentrations.
+
+```{r}
+# Setting the dose values to their pseudo log transform
+Doseresponse <- AllPenDoseresponse %>%
+                  mutate(dose = pseudo_log_dose) %>%
+                  filter(is.finite(dose))
+
+# Set up parallel backend using doParallel
+cl <- makeSOCKcluster(detectCores())
+registerDoSNOW(cl)
+
+# Create linear mixed models on pseudo log scale
+pseudo_log10.individual.model = foreach(drug.name = unique(Doseresponse$drug), 
+                                   .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
+                                   .combine = rbind) %dopar% build.individual.model(drug.name, Doseresponse)
+
+# Close parallel backend
+stopCluster(cl)
+
+# Saving mixed models
+save(pseudo_log10.individual.model, 
+     file=paste0(out_path, "/pseudo_log10 individual models.rda"))
+```
+
+## Models on medians
+
+Importing penalized preprocessed data with the different scales.
+
+```{r}
+# MedianDoseresponse
+load(paste0(out_path, "/median pen dose response with scales.rda"))
+```
+
+Function building a the linear models for a given drug across the 720 features.
+
+```{r}
+build.median.models <- function(drug.name, dataset){
+  # Create an empty data frame to store the results
+  models <- data.frame(stringsAsFactors = FALSE)
+  
+  # We look at each drug for a given feature
+  for (feature.name in unique(dataset$feature)){
+    # subset of the dataset 
+    subset <- dataset %>% 
+                  filter(feature == !!feature.name) %>%
+                  filter(drug == !!drug.name)  %>%
+                  mutate(value=median_value) %>%
+                  dplyr::select(c("dose", "value")) %>%
+                  distinct() %>%
+                  suppressMessages()
+
+    new_model <- build.sigmoid.or.linear.model(subset,feature.name, drug.name)
+    # Adding new linear model to models
+    models <- rbind(models,new_model)
+  }
+  return(models)
+}
+```
+
+**log10.median.model :** dataframe containing all the information about the linear models that are built on each feature on a log10 scale of the concentrations.
+
+```{r}
+# Setting the dose values to their log10 transform
+Doseresponse <- MedianDoseresponse %>%
+                  mutate(dose = log10_dose) %>%
+                  filter(is.finite(dose))
+build.median.linear.models(drug.name, Doseresponse)
+# Set up parallel backend using doParallel
+cl <- makeSOCKcluster(detectCores())
+registerDoSNOW(cl)
+
+# Create linear mixed models on log10 scale
+log10.median.model = foreach(drug.name = unique(Doseresponse$drug), 
+                                   .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
+                                   .combine = rbind) %dopar% build.median.models(drug.name, Doseresponse)
+
+# Close parallel backend
+stopCluster(cl)
+
+# Saving mixed models
+save(log10.median.model, 
+     file=paste0(out_path, "/log10 median models.rda"))
+```
+
+**log10_1.median.model :** dataframe containing all the information about the linear models that are built on each feature on a log10(x+1) scale of the concentrations.
+
+```{r}
+# Setting the dose values to their log10 transform
+Doseresponse <- MedianDoseresponse %>%
+                  mutate(dose = log10_1_dose) %>%
+                  filter(is.finite(dose))
+
+# Set up parallel backend using doParallel
+cl <- makeSOCKcluster(detectCores())
+registerDoSNOW(cl)
+
+# Create linear mixed models on log10 scale
+log10_1.median.model = foreach(drug.name = unique(Doseresponse$drug),
+                                      .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
+                                      .combine = rbind) %dopar% build.median.models(drug.name, Doseresponse)
+
+# Close parallel backend
+stopCluster(cl)
+
+# Saving mixed models
+save(log10_1.median.model, 
+     file=paste0(out_path, "/log10_1 median models.rda"))
+```
+
+**pseudo_log10.median.model :** dataframe containing all the information about the linear models that are built on each feature on a pseudo_log10 scale of the concentrations.
+
+```{r}
+# Setting the dose values to their log10 transform
+Doseresponse <- MedianDoseresponse %>%
+                  mutate(dose = pseudo_log_dose) %>%
+                  filter(is.finite(dose))
+
+# Set up parallel backend using doParallel
+cl <- makeSOCKcluster(detectCores())
+registerDoSNOW(cl)
+
+# Create linear mixed models on log10 scale
+pseudo_log10.median.model = foreach(drug.name = unique(Doseresponse$drug),
+                                           .packages = c("tidyverse","lme4", "lmerTest", "dplyr"),
+                                           .combine = rbind) %dopar% build.median.models(drug.name, Doseresponse)
+
+# Close parallel backend
+stopCluster(cl)
+
+# Saving mixed models
+save(pseudo_log10.median.model, 
+     file=paste0(out_path, "/pseudo_log10 median models.rda"))
+```
+
+## Determining the most relevant scale and model fitting strategy
+
+Loading the models (Necessary only if you haven't run all the code above).
+
+```{r}
+for (scale in c("pseudo_log10", "log10", "log10_1")){
+  load(paste(out_path, "/", scale, " median models.rda", sep=""))
+  load(paste(out_path, "/", scale, " individual models.rda", sep=""))
+}
+```
+
+Looking at how many models are sigmoids
+
+```{r}
+print("-------------------------------------------------------")
+print("Number of features that are represented by sigmoid models")
+print("-------------------------------------------------------")
+indiv.total <- dim(log10.individual.model)[1]
+print(paste0("Total number of drugxfeatures combinations (indivual models): ", 
+             indiv.total))
+print(paste("pseudo_log10.individual.model : ",
+             dim(pseudo_log10.individual.model[pseudo_log10.individual.model$class == "sigmoid",])[1], " (",
+             dim(pseudo_log10.individual.model[pseudo_log10.individual.model$class == "sigmoid",])[1]/indiv.total,"%)", 
+             sep=""))
+print(paste("log10.linear.individualmodel : ",
+             dim(log10.individual.model[log10.individual.model$class == "sigmoid",])[1]," (",
+             dim(log10.individual.model[log10.individual.model$class == "sigmoid",])[1]/indiv.total,"%)", 
+             sep=""))
+print(paste("log10_1.individual.model : ",
+             dim(log10_1.individual.model[log10_1.individual.model$class == "sigmoid",])[1]," (",
+             dim(log10_1.individual.model[log10_1.individual.model$class == "sigmoid",])[1]/indiv.total,"%)", 
+             sep=""))
+print("-------------------------------------------------------")
+median.total <- dim(log10.median.model)[1]
+print(paste("Total number of drugxfeatures combinations (median models): ", 
+             median.total))
+print(paste("pseudo_log10.median.model : ",
+             dim(pseudo_log10.median.model[pseudo_log10.median.model$class == "sigmoid",])[1]," (",
+             dim(pseudo_log10.median.model[pseudo_log10.median.model$class == "sigmoid",])[1]/median.total,"%)", 
+             sep=""))
+print(paste("log10.median.model : ",
+             dim(log10.median.model[log10.median.model$class == "sigmoid",])[1]," (",
+             dim(log10.median.model[log10.median.model$class == "sigmoid",])[1]/median.total,"%)", 
+             sep=""))
+print(paste0("log10_1.median.model : ",
+             dim(log10_1.median.model[log10_1.median.model$class == "sigmoid",])[1]," (",
+             dim(log10_1.median.model[log10_1.median.model$class == "sigmoid",])[1]/median.total,"%)", 
+             sep=""))
+```
+
+## Models analysis
+
+Loading log10_1.median.model and log10_1.individualmodel (Necessary only if you haven't run all the code above).
+
+```{r}
+load(paste0(out_path, "/log10_1 median models.rda"))
+load(paste0(out_path, "/log10_1 individual models.rda"))
+```
+
+To see which models are the best fit, we decided to rank them based on different scores which are all going to be store in the variable **model.scores**.
+
+
+```{r}
+# Dataframe containing : max value and min value for a given featurexdrugxid
+individual.extremum <- AllPenDoseresponse %>%
+                          group_by(feature, drug, ID) %>%
+                          dplyr::summarise(max=max(value), min=min(value)) %>%
+                          mutate(range=max-min)
+
+# Dataframe containing : nrmse, pval
+individual.model.scores <- log10_1.individual.model %>%
+                          left_join(individual.extremum, by=c("ID", "feature", "drug")) %>%
+                          mutate(nrmse = 100*rmse/range) %>%
+                          dplyr::select(ID, feature, drug, pval, aic, nrmse) %>%
+                          arrange(desc(nrmse))
+
+# Dataframe containing : max value and min value for a given featurexdrugxid
+median.extremum <- MedianDoseresponse %>%
+                          group_by(feature, drug) %>%
+                          dplyr::summarise(max=max(median_value), min=min(median_value)) %>%
+                          mutate(range=max-min)
+
+# Dataframe containing : nrmse, pval
+median.model.scores <- log10_1.median.model %>%
+                          left_join(median.extremum, by=c("feature", "drug")) %>%
+                          mutate(nrmse = 100*rmse/range) %>%
+                          dplyr::select(feature, drug, pval, aic, nrmse) %>%
+                          arrange(desc(nrmse))
+```
+
+Saving model.scores
+
+```{r}
+save(median.model.scores, file=paste0(out_path, "/median model scores.rda"))
+save(individual.model.scores, file=paste0(out_path, "/individual model scores.rda"))
+```
+
+## Visualization
+
+Importing preprocessed data.
+
+```{r}
+# AllPenDoseresponse
+load(paste0(out_path, "/all pen dose response with scales.rda"))
+# MedianDoseresponse
+load(paste0(out_path, "/median pen dose response with scales.rda"))
+```
+
+Function regrouping all the differenty class of models we applied to our data
+
+```{r}
+# Define functions for the different class of models
+model_function <- function(x, model_class, constant, Intercept, slope, b, c, d, e) {
+  if (model_class == "linear") {
+    return(Intercept + slope * x)
+  } else if (model_class=="sigmoid"|| model_class=="new.sigmoid" || model_class=="constant.sigmoid") {
+    return(c + (d - c) / (1 + exp(-b * (x - e))))
+  } else if (model_class == "constant") {
+    return(constant)
+  } else {
+    return(NULL)
+  }
+}
+```
+
+Function creating one plot for individual models
+
+```{r}
+plot_individual_models <- function(target_feature, target_drug, model_list=log10_1.individual.model){
+  # Selecting a specific model
+  target_models <- subset(model_list,
+                      feature == target_feature & drug == target_drug)
+  
+  # Setting the dose values to their log10(x+1) transform
+  data <- AllPenDoseresponse %>%
+                    mutate(dose = log10_1_dose,
+                           ID = as.factor(ID)) %>%
+                    filter(is.finite(dose),
+                           feature == target_feature,
+                           drug == target_drug) %>%
+                    dplyr::select(ID, dose, value)
+  
+  # Dataframe containing the function values on [min(dose), max(dose)]
+  X = seq(min(data$dose), max(data$dose), length.out=100)
+  df_fun <- data.frame(x=X, fun = rep(as.factor(target_models$ID), each = 100))
+  values <- c()
+  for (id in target_models$ID){
+    model=target_models[target_models$ID==id,]
+    constant <-data[data$ID==id,]$value[1]
+    for (x in X){
+        values <- c(values, 
+                    model_function(x, model$class, constant, model$Intercept, model$slope, model$b, model$c, model$d, model$e))
+    }
+  }
+  df_fun <- cbind(df_fun, values)
+  
+  # Plot
+  plot <- ggplot()
+  for (id in target_models$ID){
+    plot <- plot + geom_line(data=filter(df_fun, fun==id), aes(x, values, color = fun))
+  }
+  plot <- plot + 
+          geom_point(data=data, aes(x=dose, y=value, color=ID)) +
+          xlab(target_drug) +
+          ylab(target_feature)
+  return(plot)
+}
+```
+
+Function creating one plot for median model
+
+```{r}
+plot_median_model <- function(target_feature, target_drug, model_list=log10_1.median.model){
+  # Selecting a specific model
+  target_model <- subset(model_list,
+                      feature == target_feature & drug == target_drug)
+  
+  # Setting the dose values to their pseudo log transform
+  data <- AllPenDoseresponse %>%
+                    mutate(dose = log10_1_dose,
+                           ID = as.factor(ID)) %>%
+                    filter(is.finite(dose),
+                           feature == target_feature,
+                           drug == target_drug) %>%
+                    dplyr::select(ID, dose, value)
+
+  # Dataframe containing the function values on [min(dose), max(dose)]
+  X = seq(min(data$dose)-0.1, max(data$dose)+0.1, length.out=100)
+  df_fun <- data.frame(x=X)
+  values <- c()
+  constant <-median(data[data$ID==1,]$value)
+  for (x in X){
+    values <- c(values,
+                model_function(x, target_model$class, constant, target_model$Intercept, target_model$slope, target_model$b, target_model$c, target_model$d, target_model$e))
+  }
+  df_fun <- cbind(df_fun, values)
+  
+  # Plot
+  plot <- ggplot() +
+    geom_boxplot(data=data, mapping=aes(x=dose, y=value, group=dose)) + 
+    geom_line(data=df_fun, aes(x, values)) +
+    xlab(target_drug) +
+    ylab(target_feature)
+  
+  return(plot)
+}
+```
+
+Example plots
+ 
+```{r}
+plot_individual_models("CD56hiCD16negNK_STAT1_IFNa","Chlorthalidone")
+plot_median_model("Bcells_CREB_IFNa","Clotrimazole")
+```
+Plotting the models for all the data
+
+```{r}
+###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ###### 
+
+# Creating a list containing all the plots
+list_individual_plots <- list()
+list_median_plots <- list()
+for (target_feature in unique(AllPenDoseresponse$feature)){
+  for (target_drug in unique(AllPenDoseresponse$drug)){
+    list_individual_plots[[length(list_individual_plots)+1]] <- plot_individual_models(target_feature, target_drug)
+    list_median_plots[[length(list_individual_plots)+1]] <- plot_median_model(target_feature, target_drug)
+  }
+}
+
+# Save the grid of individual plots as a PDF file
+pdf(paste0(out_path, "/plots/drug_feature_individual_models_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_individual_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+
+# Save the grid of median plots as a PDF file
+pdf(paste0(out_path, "/plots/drug_feature_median_models_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_median_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+```
+
+**Conclusion :** The best models seem to fit the data very well. However, some linear models don't make a lot of sense. We are going to transform these linear models into sigmoid models.
+
+# Replacing linear models with sigmoid models
+
+Here we are going to look at the linear models and try to replace them by sigmoid models only when it makes more sense :
+- We will identify all the individual models that are in the same category (same drug and same feature)
+_ We will identify the trend of sigmoid models built in the same category (increasing or decreasing and the abcisse of the inflexion point)
+_ We will hardcode a new sigmoid model and compare it rmse with the linear model
+_ We will keep the best model out of the two
+
+```{r}
+# Sigmoid function we want to try to fit
+sigmoid_model <- function(x, b, c, d, e) {
+  c + (d - c) / (1 + exp(-b * (x - e)))
+}
+
+# Function building new sigmoids and comparing their rmse with the old linear model to keep the best model
+build.new.sigmoid <- function(old_linear_model, ref_sigmoid, individual_data, median_data, scale="log10_1_dose"){
+  # Selecting either the median data or the individual
+  if (old_linear_model$ID == "median"){
+    data <- median_data %>% mutate(dose=get(scale), value=median_value)
+  }else{
+    data <- individual_data %>% mutate(dose=get(scale))
+  }
+  # Setting the parameters of the new sigmoids based on the reference and the data
+  b <- ref_sigmoid$b
+  e <- ref_sigmoid$e
+  b_median <- median(filter(data, dose <= e)$value) # Median of the data before e
+  a_median <- median(filter(data, dose >= e)$value) # Median of the data after e
+  c <- min(b_median, a_median)
+  d <- max(b_median, a_median)
+    
+  # New sigmoid scores
+  preds <- sigmoid_model(data$dose, b, c, d, e)
+  residuals <- preds - data$value
+  new.rmse <- sqrt(mean(residuals^2))
+  new.aic <- 8 - 2*log(1/sqrt(2*pi*sum(residuals^2)/nrow(data))*exp(-sum(residuals^2)/(2*nrow(data))))
+  return(data.frame(feature=old_linear_model$feature,
+                      drug=old_linear_model$drug,
+                      ID=old_linear_model$ID,
+                      b=b,
+                      c=c,
+                      d=d,
+                      e=e,
+                      Intercept=NA,
+                      slope=NA,
+                      aic=new.aic,
+                      rmse=new.rmse,
+                      pval=NA,
+                      class="new.sigmoid",
+                      stringsAsFactors = FALSE))
+}
+
+# Initialization of the new models
+new.log10_1.individual.model <- c()
+new.log10_1.median.model <- c()
+
+# Progress bar
+pb <- txtProgressBar(min = 0, max = length(unique(log10_1.individual.model$feature))*length(unique(log10_1.individual.model$drug)), style = 3)
+i <- 0
+
+# Going through all the feature, drug combinations to change linear models with new sigmoids
+for (target_feature in unique(log10_1.individual.model$feature)){
+  for (target_drug in unique(log10_1.individual.model$drug)){
+    # Progress bar
+    setTxtProgressBar(pb, i)
+    
+    # Isolating the models on target_feature and drug feature
+    individual_target_models <- log10_1.individual.model %>% filter(feature==target_feature, drug==target_drug)
+    median_target_model <- log10_1.median.model %>% filter(feature==target_feature, drug==target_drug)
+    target_models <- rbind(median_target_model, individual_target_models)
+    # Taking as reference sigmoid the model on the medians (if it is a sigmoid) or else one of the individual sigmoid
+    ref_sigmoid <- target_models %>% filter(class=="sigmoid") %>% slice(1)
+    # Taking all the linear models which we are going to try to change for sigmoids
+    old_linear <- target_models %>% filter(class=="linear")
+    
+    # If there is at least one sigmoid model and one linear model, we try building new sigmoid models
+    if (dim(ref_sigmoid)[1]==1 && dim(old_linear)[1]>=1){
+      new_sigmoids <- c()
+      # Building new sigmoids for all individuals and median models
+      for (id in target_models$ID){
+        # Building a new sigmoid for the old linear models
+        if (id %in% old_linear$ID){
+          individual_data <- subset(AllPenDoseresponse, (feature==target_feature) & (drug==target_drug) & (ID==id))
+          median_data <- subset(MedianDoseresponse, (feature==target_feature) & (drug==target_drug))
+          new_sigmoids <- rbind(new_sigmoids, build.new.sigmoid(filter(target_models, ID==id), ref_sigmoid, individual_data, median_data))
+        # Keeping old sigmoid and constant models
+        }else{
+          new_sigmoids <- rbind(new_sigmoids, filter(target_models, ID==id))
+        }
+      }
+      # Adding the new sigmoids to the new models
+      new.log10_1.individual.model <- rbind(new.log10_1.individual.model, filter(new_sigmoids, ID!="median"))
+      new.log10_1.median.model <- rbind(new.log10_1.median.model, filter(new_sigmoids, ID=="median"))
+      
+    # If there are no reference sigmoid or no linear models to change
+    }else{
+      # Adding the old models without any changes
+      new.log10_1.individual.model <- rbind(new.log10_1.individual.model, filter(target_models, ID!="median"))
+      new.log10_1.median.model <- rbind(new.log10_1.median.model, filter(target_models, ID=="median"))
+    }
+    
+    # Incrementation for progress bar
+    i <- i + 1
+  }
+}
+
+# Saving the new models
+save(new.log10_1.individual.model, file=paste0(out_path, "/log10_1 new individual models.rda"))
+save(new.log10_1.median.model, file=paste0(out_path, "/log10_1 new median models.rda"))
+```
+
+Plotting the new models
+
+```{r}
+###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ###### 
+
+# Creating a list containing all the plots
+list_individual_plots <- list()
+list_median_plots <- list()
+for (target_feature in unique(AllPenDoseresponse$feature)){
+  for (target_drug in unique(AllPenDoseresponse$drug)){
+    list_individual_plots[[length(list_individual_plots)+1]] <- plot_individual_models(target_feature, 
+                                                                                       target_drug, 
+                                                                                       new.log10_1.individual.model)
+    list_median_plots[[length(list_individual_plots)+1]] <- plot_median_model(target_feature, 
+                                                                              target_drug, 
+                                                                              new.log10_1.median.model)
+  }
+}
+
+# Save the grid of individual plots as a PDF file
+pdf(paste0(out_path, "/plots/drug_feature_new_individual_models_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_individual_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+
+# Save the grid of median plots as a PDF file
+pdf(paste0(out_path, "/plots/drug_feature_new_median_models_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_median_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+```
+
+## Building only sigmoids by hand
+
+Here we are going to use the precedent idea to build sigmoid or constant models on all the data.
+
+```{r}
+# Sigmoid function we want to try to fit
+sigmoid_model <- function(x, b, c, d, e) {
+  c + (d - c) / (1 + exp(-b * (x - e)))
+}
+
+# Function building "by hand" sigmoids or constant models
+build.hand.sigmoid <- function(data, id="median", scale="log10_1_dose"){
+  # Selecting either the median data or the individual
+  if (id == "median"){
+    data <- data %>% mutate(dose=get(scale), value=median_value)
+  }else{
+    data <- data %>% mutate(dose=get(scale)) %>% filter(ID==id)
+  }
+  
+  # Returning a constant model when there is only one value
+  if (length(unique(data$value)) == 1){
+    return(data.frame(feature=data$feature[1],
+                      drug=data$drug[1],
+                      ID=id,
+                      b=0,
+                      c=data$value[1],
+                      d=data$value[1],
+                      e=0,
+                      aic=NA,
+                      rmse=NA,
+                      class="constant.sigmoid",
+                      stringsAsFactors = FALSE))
+    
+  # Returning a sigmoid 
+  }else{
+    best.rmse <- Inf
+    for (i in seq(data$dose[-length(data$dose)])){
+      # Setting the parameters of the new sigmoids based on the data
+      new.e <- (data$dose[i] + data$dose[i+1])/2
+      new.b.1 <- 4/(data$dose[i]-new.e)
+      new.b.2 <- 4/(data$dose[i+1]-new.e)
+      b_median <- median(filter(data, dose <= new.e)$value) # Median of the data before new.e
+      a_median <- median(filter(data, dose >= new.e)$value) # Median of the data after new.e
+      new.c <- min(b_median, a_median)
+      new.d <- max(b_median, a_median)
+      # New sigmoid scores
+      preds.1 <- sigmoid_model(data$dose, new.b.1, new.c, new.d, new.e)
+      preds.2 <- sigmoid_model(data$dose, new.b.2, new.c, new.d, new.e)
+      residuals.1 <- preds.1 - data$value
+      residuals.2 <- preds.2 - data$value
+      new.rmse.1 <- sqrt(mean(residuals.1^2))
+      new.rmse.2 <- sqrt(mean(residuals.2^2))
+      # Comparing rmse between decreasing sigmoid (1) and increasing sigmoid (2) to keep the best one
+      if (new.rmse.1 < new.rmse.2){
+        new.rmse <- new.rmse.1
+        new.b <- new.b.1
+        new.aic <- 8 - 2*log(1/sqrt(2*pi*sum(residuals.1^2)/nrow(data))*exp(-sum(residuals.1^2)/(2*nrow(data))))
+      }else{
+        new.rmse <- new.rmse.2
+        new.b <- new.b.2
+        new.aic <- 8 - 2*log(1/sqrt(2*pi*sum(residuals.2^2)/nrow(data))*exp(-sum(residuals.2^2)/(2*nrow(data))))
+      }
+      # Updating the best model parameters when we get a better sigmoid for the data
+      if (new.rmse < best.rmse){
+        best.rmse <- new.rmse
+        best.aic <- new.aic
+        best.b <- new.b
+        best.c <- new.c
+        best.d <- new.d
+        best.e <- new.e
+      }
+    }
+    return(data.frame(feature=data$feature[1],
+                      drug=data$drug[1],
+                      ID=id,
+                      b=best.b,
+                      c=best.c,
+                      d=best.d,
+                      e=best.e,
+                      aic=best.aic,
+                      rmse=best.rmse,
+                      class="sigmoid",
+                      stringsAsFactors = FALSE))
+  }
+}
+
+# Initialization of the hand models
+hand.log10_1.individual.model <- c()
+hand.log10_1.median.model <- c()
+
+# Progress bar
+pb <- txtProgressBar(min = 0, max = length(unique(AllPenDoseresponse$feature))*length(unique(AllPenDoseresponse$drug)), style = 3)
+i <- 0
+
+# Going through all the feature, drug combinations and building the hand sigmoids
+for (target_feature in unique(AllPenDoseresponse$feature)){
+  for (target_drug in unique(AllPenDoseresponse$drug)){
+    # Progress bar
+    setTxtProgressBar(pb, i)
+    
+    # Isolating the data on target_feature and drug feature
+    individual_data <- AllPenDoseresponse %>% filter(feature==target_feature, drug==target_drug)
+    median_data <- MedianDoseresponse %>% filter(feature==target_feature, drug==target_drug)
+    
+    # Building hand sigmoids for all individuals
+    individual_models <- c()
+    for (id in unique(individual_data$ID)){
+        individual_models <- rbind(individual_models, build.hand.sigmoid(individual_data, id))
+    }
+    # Building hand sigmoids for median values
+    median_model <- build.hand.sigmoid(median_data)
+    
+    # Adding the new hand sigmoids to the hand models
+    hand.log10_1.individual.model <- rbind(hand.log10_1.individual.model, individual_models)
+    hand.log10_1.median.model <- rbind(hand.log10_1.median.model, median_model)
+    
+    # Incrementation for progress bar
+    i <- i + 1
+  }
+}
+
+# Saving the new models
+save(hand.log10_1.individual.model, file=paste0(out_path, "/log10_1 hand individual models.rda"))
+save(hand.log10_1.median.model, file=paste0(out_path, "/log10_1 hand median models.rda"))
+```
+
+Plotting the hand models
+
+```{r}
+###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ###### 
+
+# Creating a list containing all the plots
+list_individual_plots <- list()
+list_median_plots <- list()
+for (target_feature in unique(AllPenDoseresponse$feature)){
+  for (target_drug in unique(AllPenDoseresponse$drug)){
+    list_individual_plots[[length(list_individual_plots)+1]] <- plot_individual_models(target_feature, 
+                                                                                       target_drug, 
+                                                                                       hand.log10_1.individual.model)
+    list_median_plots[[length(list_individual_plots)+1]] <- plot_median_model(target_feature, 
+                                                                              target_drug, 
+                                                                              hand.log10_1.median.model)
+  }
+}
+
+# Save the grid of individual plots as a PDF file
+pdf(paste0(out_path, "/plots/drug_feature_hand_individual_models_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_individual_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+
+# Save the grid of median plots as a PDF file
+pdf(paste0(out_path, "/plots/drug_feature_hand_median_models_grid.pdf"), width = 15, height = 9)
+for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
+  grid.draw(grid.arrange(grobs=list_median_plots[(15*i+1):(15*i+15)], nrow=3, ncol = 5))
+}
+dev.off()
+```
+
