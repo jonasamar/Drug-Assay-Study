@@ -1,0 +1,2 @@
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Drug assay data/Preprocessed Data/all pen dose response with scales.rda")
+ls()

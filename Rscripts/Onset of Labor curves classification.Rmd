@@ -7,13 +7,11 @@ This is script has been taken from the original OOL Study and modified to retrie
 
 ## Paths
 
-**Copy Paste Here the path to your Drug-Assay-Study folder**
+Here we set all the necessary paths to import and save data and plots.
 
 ```{r}
-my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
-```
-
-```{r}
+current_dir <- getwd()
+my_path <- sub("/[^/]+$", "", current_dir)
 setwd(paste0(my_path,"/Rscripts"))
 OOL_path=paste0(my_path,"/Onset of Labor data")
 funct_path=paste0(OOL_path,"/Preprocessed Data/immunome_EGA_DOS_pen_OOL.csv")
@@ -42,7 +40,7 @@ library(gridExtra)
 Selecting if you want the following script to fit models on DOS or EGA and if you want to fit on term, preterm or all the data.
 
 ```{r}
-mode <- "DOS" #EGA or DOS
+mode <- "EGA" #EGA or DOS
 cohort <- "all" #preterm or term or all
 ```
 
@@ -79,7 +77,7 @@ cytof <- setdiff(colnames(data), c("DOS", "DOS2", "EGA", "EGA2", "ID"))
 
 **df_models :** dataframe containing the list of the immunome features with the best fitted model (either linear or quadratic).
 
-**df_sum :** dataframe containing the list of the immunome features and informations regarding the linear and quadratic models:
+**df_sum :** dataframe containing the list of the immunome features and information regarding the linear and quadratic models:
 - coefficients of the quadratic model (a, b)
 - pvalue of the best model
 - the AIC of linear and quadratic models
@@ -137,10 +135,10 @@ for (feature in cytof){
                                   stringsAsFactors = FALSE))
 }
 
-# Creating df_sum with all the collected informations on the models
+# Creating df_sum with all the collected information on the models
 df_sum = data.frame(cytof, 
-                    linear_fit = abs(cv_lin), 
-                    quadratic_fit = cv_both, 
+                    linear_aic = cv_lin,
+                    quadratic_aic = cv_both, 
                     pval = best, 
                     a = coef_quad_d2, 
                     b = coef_quad_d1,
@@ -221,9 +219,10 @@ if (mode=="EGA"){
 }
 plots <- list()
 for (target_feature in feature_list) {
+  # Getting the coefficients and class of the model
   coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
   
-  # building the predictions
+  # Building the predictions
   y <- data[, target_feature]
   intercept <- coefs[['(Intercept)']]
   if (length(coefs) == 3){ # quadratic model

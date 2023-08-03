@@ -7,13 +7,11 @@ Here we are building a model similar to the one of the OOL study but on the data
 
 ## Paths
 
-**Copy Paste Here the path to your Drug-Assay-Study folder**
+Here we set all the necessary paths to import and save data and plots.
 
 ```{r}
-my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
-```
-
-```{r}
+current_dir <- getwd()
+my_path <- sub("/[^/]+$", "", current_dir)
 setwd(paste0(my_path,"/Rscripts"))
 OOL_path=paste0(my_path,"/Onset of Labor data")
 drug_assay_path=paste0(my_path,"/Drug assay data")
@@ -83,28 +81,25 @@ preprocessing <- function(dataset, NA_threshold, std_threshold){
 Importing and preprocessing the data for DOS between DOS_inf and DOS_sup
 
 ```{r}
-# When running the script to predict TTL for simulated data
-predicting.simulated.data = FALSE
-# DOS limits of the training data
-DOS_inf=-120
-DOS_sup=1
-# all.simulated.data
-if (predicting.simulated.data){
-  load(paste0(OOL_path, "/Simulated Data/immunome_noEGA_OOL_with_drugs.rda"))
-}else{
-  all.simulated.data=NULL
+# median.simulated.data
+if (file.exists(paste0(OOL_path, "/Simulated Data/median simulated data.rda"))){
+  load(paste0(OOL_path, "/Simulated Data/median simulated data.rda"))
+}
+# individual.simulated.data
+if (file.exists(paste0(OOL_path, "/Simulated Data/individual simulated data.rda"))){
+  load(paste0(OOL_path, "/Simulated Data/individual simulated data.rda"))
 }
 # Outcomes
 Yh <- read_csv(paste0(OOL_path, "/Preprocessed Data/outcome_OOL.csv"), show_col_types = FALSE)
 # CYTOF data
 CYTOF <- read_csv(paste0(OOL_path, "/Preprocessed Data/immunome_EGA_pen_OOL.csv"), show_col_types = FALSE)
 # Reorordering and filtering CYTOF data
-data <- left_join(Yh, CYTOF, by="ID") %>% filter((DOS <= DOS_sup)&(DOS>=DOS_inf))
+data <- left_join(Yh, CYTOF, by="ID")
 preterm_rows <- which(grepl(paste(c("P17_", "P8_", "P3_", "P5_", "P27_"), collapse = "|"), data$ID))
+CYTOF <- dplyr::select(data, -DOS)
+CYTOF <- dplyr::select(CYTOF, -EGA) # Removing EGA
 Yh <- data$DOS
 EGA <- data$EGA
-CYTOF <- dplyr::select(data, -DOS)
-CYTOF <- dplyr::select(data, -EGA) # Removing EGA
 # Preprocessing
 CYTOF <- preprocessing(CYTOF, 0.2, 0.)
 # Patients Id
@@ -181,7 +176,7 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   fld[fld>=i]=fld[fld>=i]-1
 
   ret = list()
-  
+
   # Removed columns
   ret$rm_cols <- rm_columns
   
@@ -193,19 +188,19 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   ret$model = cvglm
   
   # Elastic Net
-  EN_cv = cv.glmnet(x = XX, y = YY, foldid = fld, alpha = parm$a)
+  EN_cv = cv.glmnet(x = XX, y = YY, standardize=F, foldid = fld, alpha = parm$a)
   ret$EN_p1 = predict(EN_cv, XT, s=EN_cv$lambda.min)
   ret$EN_ptrain1 = predict(EN_cv, XX, s=EN_cv$lambda.min)
   ret$EN_coef = coef(EN_cv, s=EN_cv$lambda.min)[-1]
 
   # Ridge Regression
-  ridge_cv = cv.glmnet(x = XX, y = YY, foldid = fld, alpha = 0)
+  ridge_cv = cv.glmnet(x = XX, y = YY, standardize=F, foldid = fld, alpha = 0)
   ret$ridge_p1 = predict(ridge_cv, XT, s=ridge_cv$lambda.min)
   ret$ridge_ptrain1 = predict(ridge_cv, XX, s=ridge_cv$lambda.min)
   ret$ridge_coef = coef(ridge_cv, s=ridge_cv$lambda.min)[-1]
   
   # Adaptive LASSO
-  alasso1_cv = cv.glmnet(x = XX, y = YY, foldid = fld, alpha = 1,
+  alasso1_cv = cv.glmnet(x = XX, y = YY, standardize=F, foldid = fld, alpha = 1,
                         penalty.factor = 1 / abs(ret$ridge_coef),
                         keep = TRUE)
   ret$alasso_p1 = predict(alasso1_cv, XT, s=alasso1_cv$lambda.min)
@@ -213,38 +208,59 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   ret$alasso_coef = coef(alasso1_cv, s=alasso1_cv$lambda.min)[-1]
   
   # Random Forest
-  rd_forest_cv = randomForest(x = XX, y = YY, importance=TRUE)
+  rd_forest_cv = randomForest(x = XX, y = YY, standardize=F, importance=TRUE)
   ret$rd_forest_p1 = predict(rd_forest_cv, XT)
   ret$rd_forest_ptrain1 = predict(rd_forest_cv, XX)
   ret$rd_forest_importance = rd_forest_cv$importance
   
   if (predict.simulated.data){
-   # Predictions of Adaptive LASSO on simulated data
-    for (target_drug in unique(all.simulated.data$drug)){
-      # Applying CYTOF preprocessing to the simulated data
-      prepro_data <- all.simulated.data %>%
-        # Filtering the samples of the patients in the test set
-        filter(drug==target_drug,
-               grepl(paste("P",levels(foldid)[i],"_",sep=""),ID)) %>%
+    # Filtering the samples of the patients in the test set
+    ret$median.simulated.TTL <- subset(median.simulated.data, grepl(paste0("P",unique(foldid)[i],"_"),sampleID))
+    ret$individual.simulated.TTL <- subset(individual.simulated.data, grepl(paste0("P",unique(foldid)[i],"_"),sampleID))
+
+    # Applying CYTOF preprocessing to the median simulated data
+    median_prepro_data <- dplyr::select(ret$median.simulated.TTL, -c(drug, sampleID, centroid, dose)) %>%
         # Removing the columns which were removed in CYTOF
-        dplyr::select(colnames(CYTOF), -names(rm_columns)) %>%
+        dplyr::select(intersect(colnames(CYTOF),colnames(ret$median.simulated.TTL)), -names(ret$rm_cols)) %>%
         # Imputing the missing values with the medians of the corresponding CYTOF columns
         mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
         # Converting to a matrix
-        column_to_rownames(var = "ID") %>%
         as.matrix()
-  
-      # Predictions
-      if (parm$predict.model == "Random.Forest"){
-        ret[[target_drug]] <- predict(rd_forest_cv, prepro_data)
-      }
-      if (parm$predict.model == "ElasticNet"){
-        ret[[target_drug]] <- predict(EN_cv, prepro_data, s=EN_cv$lambda.min)
-      }
-      if (parm$predict.model == "Lasso.1se"){
-        ret[[target_drug]] <- predict(cvglm, prepro_data, s='lambda.1se')
-      }
+    
+    # Applying CYTOF preprocessing to the individual simulated data
+    individual_prepro_data <- dplyr::select(ret$individual.simulated.TTL, -c(drug, sampleID, centroid, dose)) %>%
+        # Removing the columns which were removed in CYTOF
+        dplyr::select(intersect(colnames(CYTOF),colnames(ret$individual.simulated.TTL)), -names(ret$rm_cols)) %>%
+        # Imputing the missing values with the medians of the corresponding CYTOF columns
+        mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
+        # Converting to a matrix
+        as.matrix()
+
+    # Predictions
+    if (parm$predict.model == "Random.Forest"){
+      median_predictions <- predict(rd_forest_cv, median_prepro_data)
+      individual_predictions <- predict(rd_forest_cv, individual_prepro_data)
+    }else if(parm$predict.model == "ElasticNet"){
+      median_predictions <- predict(EN_cv, median_prepro_data, s=EN_cv$lambda.min)
+      individual_predictions <- predict(EN_cv, individual_prepro_data, s=EN_cv$lambda.min)
+    }else if(parm$predict.model == "Lasso.1se"){
+      median_predictions <- predict(cvglm, median_prepro_data, s='lambda.1se')
+      individual_predictions <- predict(cvglm, individual_prepro_data, s='lambda.1se')
+    }else if(parm$predict.model == "Ridge.Regression"){
+      median_predictions <- predict(ridge_cv, median_prepro_data, s=ridge_cv$lambda.min)
+      individual_predictions <- predict(ridge_cv, individual_prepro_data, s=ridge_cv$lambda.min)
+    }else if(parm$predict.model == "Adaptive.Lasso"){
+      median_predictions <- predict(alasso1_cv, median_prepro_data, s=alasso1_cv$lambda.min)
+      individual_predictions <- predict(alasso1_cv, individual_prepro_data, s=alasso1_cv$lambda.min)
+    }else{
+      median_predictions <- rep(NA, dim(median_prepro_data)[0])
+      individual_predictions <- rep(NA, dim(individual_prepro_data)[0])
     }
+    
+    ret$median.simulated.TTL <-cbind(dplyr::select(ret$median.simulated.TTL, c(drug, sampleID, centroid, dose)),
+                                     median_predictions)
+    ret$individual.simulated.TTL <-cbind(dplyr::select(ret$individual.simulated.TTL, c(drug, sampleID, centroid, dose)),
+                                     individual_predictions)
   }
 
   return(ret)
@@ -335,7 +351,6 @@ Plotting the best pvalue threshold with their corresponding best spearmanr
 ```{r}
 # listr
 load(paste0(out_path, "/Pvalue threshold optimization.rda"))
-#load(paste0(out_path, "/Pvalue threshold optimization with EGA.rda"))
 
 # Reshaping listr for plotting
 listr <- as.data.frame(listr) %>% 
@@ -343,19 +358,29 @@ listr <- as.data.frame(listr) %>%
                names_to = "model", values_to = "speamanr")
 
 # Find the p-value threshold with the highest Spearman's correlation score
-best_threshold <- listr$pval_threshold[which.max(listr$speamanr)]
-best_lm_threshold <- listr[listr$model!="Random.Forest",]$pval_threshold[which.max(listr[listr$model!="Random.Forest",]$speamanr)]
+best_forest_threshold <- listr[listr$model=="Random.Forest",]$pval_threshold[which.max(listr[listr$model=="Random.Forest",]$speamanr)]
+best_lasso_threshold <- listr[listr$model=="Lasso.1se",]$pval_threshold[which.max(listr[listr$model=="Lasso.1se",]$speamanr)]
+best_EN_threshold <- listr[listr$model=="ElasticNet",]$pval_threshold[which.max(listr[listr$model=="ElasticNet",]$speamanr)]
+best_ridge_threshold <- listr[listr$model=="Ridge.Regression",]$pval_threshold[which.max(listr[listr$model=="Ridge.Regression",]$speamanr)]
+best_alasso_threshold <- listr[listr$model=="Adaptive.Lasso",]$pval_threshold[which.max(listr[listr$model=="Adaptive.Lasso",]$speamanr)]
 
 # Plot
 p <- ggplot(listr, aes(x = pval_threshold, y = speamanr, color = model)) +
   geom_line() +
-  geom_segment(x = best_threshold, xend = best_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
-  geom_segment(x = best_lm_threshold, xend = best_lm_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
+  geom_segment(x = best_forest_threshold, xend = best_forest_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
+  geom_segment(x = best_lasso_threshold, xend = best_lasso_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
+  geom_segment(x = best_ridge_threshold, xend = best_ridge_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
+  geom_segment(x = best_EN_threshold, xend = best_EN_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
+  geom_segment(x = best_alasso_threshold, xend = best_alasso_threshold, y = 0., yend=max(listr$best_r_score)+0.01, linetype = "dashed") +
   labs(x = "p-value Threshold", y = "Spearman's correlation") +
   ggtitle("Spearman's Correlation Scores by Model") +
   theme_minimal() +
-  annotate("text", x = best_threshold + 0.04, y = max(listr$best_r_score)+0.01, label = best_threshold, color = "black", size = 3, vjust = -1) +
-  annotate("text", x = best_lm_threshold + 0.04, y = max(listr$best_r_score)+0.01, label = best_lm_threshold, color = "black", size = 3, vjust = -1)
+  annotate("text", x = best_forest_threshold + 0.045, y = max(listr$best_r_score)+0.01, label = best_forest_threshold, size = 3, vjust = -1) +
+  annotate("text", x = best_alasso_threshold + 0.05, y = max(listr$best_r_score)+0.02, label = best_alasso_threshold, size = 3, vjust = -1) +
+  annotate("text", x = best_ridge_threshold + 0.04, y = max(listr$best_r_score)+0.015, label = best_ridge_threshold, size = 3, vjust = -1) +
+  annotate("text", x = best_lasso_threshold , y = max(listr$best_r_score)+0.01, label = best_lasso_threshold, size = 3, vjust = -1) +
+  annotate("text", x = best_EN_threshold, y = max(listr$best_r_score)+0.015, label = best_EN_threshold, size = 3, vjust = -1)
+    
 
 # Saving plot
 pdf(paste0(plot_path, "/Optimization of pvalue filtering.pdf"), height=5, width=7)
@@ -363,29 +388,65 @@ p
 dev.off()
 ```
 
-## Model fitting
+Creating a list of the best 
 
 ```{r}
+best_pval_thresholds <- list("Lasso.1se"=best_lasso_threshold, 
+                             "Ridge.Regression"=best_ridge_threshold,
+                             "ElasticNet"=best_EN_threshold,
+                             "Adaptive.Lasso"=best_alasso_threshold,
+                             "Random.Forest"=best_forest_threshold)
+```
+
+## Building the best models according to pvalue thresholding optimizaton
+                             
+```{r}
+######################### WARNING : THIS CELL TAKES 20-30min TO RUN ! #########################
+
+# Building the best models and storing them and their predictions
+for (model.name in names(best_pval_thresholds)){
+  # xxx parameter
+  parm=list()
+  parm$scale='Patient'
+  parm$a=0.5
+  npt=length(unique(Id))
+  parm$predict.model=model.name
+  parm$pval_threshold=best_pval_thresholds[[model.name]]
+  # Opening backend-configuration
+  cl <- makeSOCKcluster(detectCores())
+  registerDoSNOW(cl)
+  # Getting models and predictions
+  prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, TRUE)
+  list_preds<-aggregation.of.predictions(prdC)
+  # Closing backend configuration
+  stopCluster(cl)
+  # Saving the models and their predictions
+  save(prdC, file=paste0(out_path, "/best ", model.name,".rda"))
+  save(list_preds, file=paste0(out_path, "/best ", model.name," predictions.rda"))
+}
+```
+
+## Model fitting with EGA
+
+```{r}
+# Getting CYTOF with EGA
+CYTOF_EGA <- dplyr::select(data, -DOS)
+# Preprocessing
+CYTOF_EGA <- preprocessing(CYTOF_EGA, 0.2, 0.)
+
 # xxx parameter
 parm=list()
 parm$scale='Patient'
 parm$a=0.5
 npt=length(unique(Id))
-parm$pval_threshold=1
-
-# without EGA
-parm$pval_threshold=0.021
-parm$predict.model="Lasso.1se"
-# with EGA
-# parm$pval_threshold=1e-14
-# parm$predict.model="Lasso.1se"
-# parm$predict.model="ElasticNet"
+parm$pval_threshold=1e-14
+parm$predict.model="ElasticNet"
 
 # Opening backend-configuration
 cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 # Getting models and predictions
-prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, predicting.simulated.data)
+prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF_EGA), Yh, Id, i, parm, TRUE)
 list_preds<-aggregation.of.predictions(prdC)
 # Closing backend configuration
 stopCluster(cl)
@@ -393,47 +454,97 @@ stopCluster(cl)
  
 ## Evaluation of results
 
-Performances of the models
+Visualization of the performances of the models.
 
 ```{r}
 # X axis
 x_axis="DOS" # EGA or DOS
 
 # Plot function
-plot.model.results <- function(y_pred, y_true, title, x_name="DOS"){
+plot.model.results <- function(y_pred, y_true, ega, title, x_name="DOS"){
   myPv = cor.test(y_true, y_pred, method = 'spearman', exact = FALSE)$p.value
   myerr = sqrt(mean((y_true-y_pred)^2))
   myr2 = 1 - sum((y_true - y_pred)^2) / sum((y_true - mean(y_true))^2)
   mycorr = cor(y_true, y_pred, method = "spearman")
   
-  if (x_name=="DOS"){dash_coefs=c(0.,1.)}
-  if (x_name=="EGA"){dash_coefs=c(-259, 6.5)}
+  if (x_name=="DOS"){
+    data <- data.frame(x = y_true, y = y_pred)
+    linear.model.fit <- lm(y_pred ~ y_true, data)
+    dash_coefs=c(coef(linear.model.fit)[["(Intercept)"]],coef(linear.model.fit)[["y_true"]])
+    x.limits <- c(-100, 0)
+    y.limits <- c(-100, 0)
+  }else if (x_name=="EGA"){
+    dash_coefs=c(-259, 6.5)
+    data <- data.frame(x = ega, y = y_pred)
+    x.limits <- c(22,40)
+    y.limits <- c(-120, 0)
+  }else{
+    dash_coefs=c(0., 1.)
+    data <- data.frame(x = NA, y = NA)
+    x.limits <- c(-1, 0)
+    y.limits <- c(-1, 0)
+  }
 
-  data <- data.frame(x = y_true, y = y_pred)
   p <- ggplot(data, aes(x = x, y = y)) + 
-        geom_point(na.rm=TRUE) +
-        geom_abline(intercept = dash_coefs[1], slope = dash_coefs[2], linetype = "dashed") +
+        geom_point(fill="black", shape=21, color = "black", size = 2., na.rm = TRUE) +
+        geom_abline(intercept = dash_coefs[1], slope = dash_coefs[2], linetype = "dashed", color = "black") +
         labs(x = x_name, y = "Prediction") +
-        scale_x_continuous(limits = c(-100, 0), expand=c(0,0)) +
-        scale_y_continuous(limits = c(-100, 0), expand=c(0,0)) +
+        scale_x_continuous(limits = x.limits, expand=c(0,0)) +
+        scale_y_continuous(limits = y.limits, expand=c(0,0)) +
         ggtitle(paste("Model : ", title,
                       "\nSpearmanr : ", round(mycorr, digits = 5), 
                       "\nRMSE : ",round(myerr, digits = 5), 
                       "\np-value : ",round(myPv, digits = 30), 
-                      "\nR^2 : ",round(myr2, digits = 5), sep=""))
+                      "\nR^2 : ",round(myr2, digits = 5), sep="")) +
+        theme(plot.title = element_text(size = 12),
+              panel.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = NA, color = NA),
+              axis.title.x = element_text(size = 12),
+              axis.title.y = element_text(size = 12),
+              axis.text.x = element_text(size = 10),
+              axis.text.y = element_text(size = 10),
+              axis.line.x = element_line(),
+              axis.line.y = element_line()) +
+        coord_fixed()
+  
   print(p)
 }
 
-# Plotting the results of the models
-for (model.name in names(list_preds)){
+# Plotting the results of the best models
+for (model.name in names(best_pval_thresholds)){
+  load(paste0(out_path, "/best ", model.name," predictions.rda"))
+  pval_threshold <- best_pval_thresholds[[model.name]]
   y_pred <- list_preds[[model.name]]
-  if (x_axis=="DOS"){x=Yh}
-  if (x_axis=="EGA"){x=EGA}
-  pdf(file=paste0(plot_path, "/", model.name, " outcomes.pdf"), height=6, width=10)
-  plot.model.results(y_pred[preterm_rows], x[preterm_rows], paste0(model.name, " on preterm"), x_axis)
-  plot.model.results(y_pred[-preterm_rows], x[-preterm_rows], paste0(model.name, " on term"), x_axis)
-  plot.model.results(y_pred, x, paste0(model.name, " on all"), x_axis)
+  pdf(file=paste0(plot_path, "/", model.name, " (p<",pval_threshold, ") on ",x_axis," outcomes.pdf"))
+  plot.model.results(y_pred[preterm_rows], Yh[preterm_rows], EGA[preterm_rows], paste0(model.name, " on preterm"), x_axis)
+  plot.model.results(y_pred[-preterm_rows], Yh[-preterm_rows], EGA[-preterm_rows], paste0(model.name, " on term"), x_axis)
+  plot.model.results(y_pred, Yh, EGA, paste0(model.name, " on all"), x_axis)
   dev.off()
+}
+```
+
+## Importing selected model and its predictions
+
+```{r}
+# Model chosen
+model.name = "ElasticNet" # ElasticNet or Ridge.Regression or Lasso.1se or Adaptive.Lasso
+# list_preds
+load(paste0(out_path, "/best ", model.name," predictions.rda"))
+# prdC
+load(paste0(out_path, "/best ", model.name,".rda"))
+# key to fetch the model's coefs in prdC
+if (parm$predict.model == "Random.Forest"){
+  coef_key <- "rd_forest_importance"
+}else if(parm$predict.model == "ElasticNet"){
+  coef_key <- "EN_coef"
+}else if(parm$predict.model == "Lasso.1se"){
+  coef_key <- "coef"
+}else if(parm$predict.model == "Ridge.Regression"){
+  coef_key <- "ridge_coef"
+}else if(parm$predict.model == "Adaptive.Lasso"){
+  coef_key <- "alasso_coef"
+}else{
+  coef_key <- NULL
 }
 ```
 
@@ -449,7 +560,7 @@ for (iter in seq(prdC)){
 rm_cols <- unique(rm_cols)
 ```
 
-Creation the feature index with adaptive lasso.
+Creation of the feature index
 
 ```{r}
 feature.index <- data.frame(feature = character(),
@@ -457,17 +568,17 @@ feature.index <- data.frame(feature = character(),
                             mean_abs_coef = double(),
                             model_index = double(),
                             stringsAsFactors = FALSE)
-cols <- colnames(CYTOF[,-c(1, rm_cols)])
+cols <- colnames(CYTOF[,-rm_cols])
 
 for (i in seq(1, length(cols))){
   # Name of the feature
   feature <- cols[i]
   # P value based on a spearman test
   pval <- cor.test(Yh, CYTOF[[feature]], method = 'spearman', exact = FALSE)$p.value
-  # Collecting all the absolute values of the coefficients of the Lasso.1se
+  # Collecting all the absolute values of the coefficients of the model
   coefs <- c()
   for (iter in seq(prdC)){
-    coefs[iter] <- abs(prdC[[iter]]$coef[i])
+    coefs[iter] <- abs(prdC[[iter]][[coef_key]][i])
   }
   # Mean of the coefficients
   mean_abs_coef <- mean(coefs)
@@ -624,7 +735,8 @@ colnames(centroids) = c("centroid1","centroid2","centroid3","centroid4")
 data_points <- rbind(data_points,
                      centroids[!(rownames(centroids) %in% c("TTL")),] %>% t() %>% cbind(matrix(c(1, 2, 3, 4), ncol=1, nrow=4, dimnames=list(NULL, "cluster"))))
 ```
-Plot of the clusters
+
+Plotting the clusters
 
 ```{r}
 # Filter out variables with variance not equal to zero
@@ -684,82 +796,124 @@ p2
 dev.off()
 ```
 
-## <<<<<<<<<<<<<<<<<<<<<<<<<<<Simulated drug effect visualization>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+## Visualization of simulated drug effect 
 
-Matrix of all the simulated predictions
+All simulated predictions
 
 ```{r}
-simulated.data.predictions <- c()
-ID_order <- all.simulated.data[all.simulated.data$drug=="Benzylpenicillin",]$ID 
-for (drug in unique(all.simulated.data$drug)){
-  drug.predictions <- c()
-  for (i in seq(prdC)){
-    drug.predictions <- rbind(drug.predictions, as.matrix(prdC[[i]][[drug]]))
-  }
-  col.names <- c(colnames(simulated.data.predictions), drug)
-  ID_order <- intersect(ID_order, rownames(drug.predictions))
-  simulated.data.predictions <- cbind(simulated.data.predictions, 
-                                      drug.predictions[ID_order,])
-  colnames(simulated.data.predictions) <- col.names
+all.simulated.predictions <- c()
+for (i in 1:length(prdC)){
+  all.simulated.predictions <- rbind(all.simulated.predictions, prdC[[i]]$median.simulated.TTL, prdC[[i]]$individual.simulated.TTL)
 }
-head(simulated.data.predictions)
+colnames(all.simulated.predictions) <- c("drug", "sampleID", "centroid", "dose", "TTL.prediction")
 ```
 
-Filtering the samples corresponding to DOS between DOS.inf and DOS.sup days
+Function plotting the distributions of the differences between estimated TTL and estimated TTL with simulated effect of the 15 drugs at concentration c_k (with c_k in {1, 2, 3, 4}) clustered around centroid.val (with centroid.val in {1, 2, 3, 4, median}).
 
 ```{r}
-# Adaptive.Lasso (cst) GOOD
-#DOS.inf <- -94
-#DOS.sup <- -74
-# ElasticNet (cst) GOOD-
-#DOS.inf <- -84
-#DOS.sup <- -70
-# Random.Forest (cst) GOOD-
-#DOS.inf <- -84
-#DOS.sup <- -70
-# Adaptive.Lasso (prop) GOOD+
-#DOS.inf <- -81
-#DOS.sup <- -73
-# ElasticNet (prop) GOOD+
-DOS.inf <- -83
-DOS.sup <- -70
-DOS.inf <- -120
-DOS.sup <- -60
-# Random.Forest (prop) GOOD-
-#DOS.inf <- -82
-#DOS.sup <- -70
-filter.ID <- subset(read_csv(paste0(OOL_path, "/outcome_OOL.csv"), show_col_types = FALSE),
-                    DOS >= DOS.inf & DOS <= DOS.sup,
-                    select = ID)$ID
+plot_delay_distribution <- function(c_k, centroid.val="median", EGA.inf=0, EGA.sup=40){
+  # Filtering the samples corresponding to EGA between EGA.inf and EGA.sup days
+  filter.ID <- subset(read_csv(paste0(OOL_path, "/Preprocessed Data/EGA_OOL.csv"), show_col_types = FALSE),
+                      EGA >= EGA.inf & EGA <= EGA.sup,
+                      select = ID)$ID
+  
+  # Getting the simulated predictions
+  drug_dose_simulated_predictions <- dplyr::filter(all.simulated.predictions, (centroid==centroid.val)&(dose==10^(c_k-1))) %>%
+                                      pivot_wider(names_from = drug, values_from = TTL.prediction) %>% column_to_rownames("sampleID") %>%
+                                      dplyr::select(-c(centroid, dose))
+  
+  # Getting the row numbers of the predictions corresponding to simulated.data
+  row_numbers <- which(data$ID %in% filter.ID)
+  
+  # TTL predictions
+  TTL.predictions <- matrix(list_preds[[model.name]][row_numbers], 
+                            nrow = length(row_numbers), 
+                            ncol = dim(drug_dose_simulated_predictions)[2], 
+                            dimnames = list(filter.ID, colnames(drug_dose_simulated_predictions)))
+  
+  # Difference between the TTL predictions and the TTL predictions with simulated drug effect
+  drug.effect.on.predictions <- - (drug_dose_simulated_predictions[filter.ID,] - TTL.predictions[filter.ID,])
+
+  # Looking at the distributions of the drug simulated effect in term of days on the TTL prediction
+  plot.data <- as.data.frame(drug.effect.on.predictions)
+  
+  # Reshape data into long format
+  plot.data_long <- gather(plot.data, key = "drug", value = "value")
+
+  # Plot distributions
+  p <- ggplot(plot.data_long, aes(x = value, fill = drug)) +
+    geom_density(alpha = 0.5) +
+    xlab("Delay (in days)") +
+    geom_vline(xintercept = 0, linetype = "dashed") +
+    ggtitle(paste0("Dose ", 10^(c_k-1))) +
+    theme_minimal()
+  plot(p)
+}
+
+# Creating a new directory
+if (!file.exists(paste0(my_path, "/Plots/Drug effect delay distributions"))){dir.create(paste0(my_path, "/Plots/Drug effect delay distributions"))}
+
+# Plotting all the combinations of plots possible
+for (centroid.val in unique(all.simulated.predictions$centroid)){
+  pdf(paste0(my_path, "/Plots/Drug effect delay distributions/Delay distribution for ", ifelse(centroid.val=="median","median effect", paste("cluster",centroid.val)), ".pdf"))
+  for (c_k in 1:4){
+    plot_delay_distribution(c_k, centroid.val, 38, 38.3)
+  }
+  dev.off()
+}
 ```
 
-Plotting the distributions of the difference between estimated TTL and estimated TTL with simulated drug effect.
+Function plotting the distributions of the differences between estimated TTL and estimated TTL with simulated effect for a given drug and its concentration c_k (with c_k in {1, 2, 3, 4}) across the four clusters.
 
 ```{r}
-# Getting the row numbers of the predictions corresponding to simulated.data
-outcomes <- read_csv(paste0(OOL_path, "/outcome_OOL.csv"), show_col_types = FALSE)
-outcomes <- outcomes[match(CYTOF$ID, outcomes$ID), ]
-row_numbers <- which(outcomes$ID %in% ID_order)
+plot_delay_distribution_across_clusters <- function(target_drug, c_k, EGA.inf=0, EGA.sup=40){
+  # Filtering the samples corresponding to EGA between EGA.inf and EGA.sup days
+  filter.ID <- subset(read_csv(paste0(OOL_path, "/Preprocessed Data/EGA_OOL.csv"), show_col_types = FALSE),
+                      EGA >= EGA.inf & EGA <= EGA.sup,
+                      select = ID)$ID
+  
+  # Getting the simulated predictions
+  drug_dose_simulated_predictions <- dplyr::filter(all.simulated.predictions, (drug==target_drug)&(dose==10^(c_k-1))) %>%
+                                      pivot_wider(names_from = centroid, values_from = TTL.prediction) %>% column_to_rownames("sampleID") %>%
+                                      dplyr::select(-c(drug, dose, median))
+  
+  # Getting the row numbers of the predictions corresponding to simulated.data
+  row_numbers <- which(data$ID %in% filter.ID)
+  
+  # TTL predictions
+  TTL.predictions <- matrix(list_preds[[model.name]][row_numbers], 
+                            nrow = length(row_numbers), 
+                            ncol = dim(drug_dose_simulated_predictions)[2], 
+                            dimnames = list(filter.ID, colnames(drug_dose_simulated_predictions)))
+  
+  # Difference between the TTL predictions and the TTL predictions with simulated drug effect
+  drug.effect.on.predictions <- - (drug_dose_simulated_predictions[filter.ID,] - TTL.predictions[filter.ID,])
 
-# TTL predictions
-TTL.predictions <- matrix(list_preds[[parm$predict.model]][row_numbers], 
-                          nrow = dim(simulated.data.predictions)[1], 
-                          ncol = dim(simulated.data.predictions)[2], 
-                          dimnames = list(ID_order, NULL))[ID_order,]
+  # Looking at the distributions of the drug simulated effect in term of days on the TTL prediction
+  plot.data <- as.data.frame(drug.effect.on.predictions)
+  
+  # Reshape data into long format
+  plot.data_long <- gather(plot.data, key = "centroid", value = "value")
 
-# Difference between the TTL predictions and the TTL predictions with simulated drug effect
-drug.effect.on.predictions <- - (simulated.data.predictions - TTL.predictions)
+  # Plot distributions
+  p <- ggplot(plot.data_long, aes(x = value, fill = centroid)) +
+    geom_density(alpha = 0.5) +
+    xlab("Delay (in days)") +
+    geom_vline(xintercept = 0, linetype = "dashed") +
+    ggtitle(paste0("Dose ", 10^(c_k-1))) +
+    scale_x_continuous(limits=c(-15, 15)) +
+    theme_minimal()
+  plot(p)
+}
 
-# Looking at the distributions of the drug simulated effect in term of days on the TTL prediction
-data <- as.data.frame(drug.effect.on.predictions[filter.ID,])
+# Creating a new directory
+if (!file.exists(paste0(my_path, "/Plots/Drug effect delay distributions"))){dir.create(paste0(my_path, "/Plots/Drug effect delay distributions"))}
 
-# Reshape data into long format
-data_long <- gather(data, key = "drug", value = "value")
+# Plotting the best drug concentration effect on the different clusters
+target_drug = "Progesterone"
+c_k = 2
 
-# Plot distributions
-ggplot(data_long, aes(x = value, fill = drug)) +
-  geom_density(alpha = 0.5) +
-  xlab("Delay (in days)") +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme_minimal()
+pdf(paste0(my_path, "/Plots/Drug effect delay distributions/Delay distribution for ", target_drug, " dose=", 10^(c_k-1), " across 4 clusters.pdf"))
+plot_delay_distribution_across_clusters(target_drug, c_k, 30, 40)
+dev.off()
 ```

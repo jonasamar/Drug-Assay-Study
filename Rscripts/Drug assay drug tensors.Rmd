@@ -11,13 +11,11 @@ The asumptions are:
 
 ## Paths
 
-**Copy Paste Here the path to your Drug-Assay-Study folder**
+Here we set all the necessary paths to import and save data and plots.
 
 ```{r}
-my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
-```
-
-```{r}
+current_dir <- getwd()
+my_path <- sub("/[^/]+$", "", current_dir)
 setwd(paste0(my_path,"/Rscripts"))
 OOL_path=paste0(my_path,"/Onset of Labor data")
 drug_assay_path=paste0(my_path,"/Drug assay data")
@@ -164,6 +162,9 @@ Importing the data
 # drug.effect.tensors
 load(paste0(out_path, "/drug effect tensors.rda"))
 
+# clusters
+load(paste0(OOL_path, "/Patients clustering/Cluster 53 OOL patients around 4 drug assay patients.rda"))
+
 # Keeping a copy of OOL_data
 original.OOL_data <- OOL_data
 
@@ -177,51 +178,98 @@ DOS <- original.OOL_data$DOS
 Function building and applying drug effect matrix on the OOL_data
 
 ```{r}
-apply.effect.matrix <- function(target_drug, c_k, centroid_id="median"){
+simulate.sample.data.under.all.drugs <- function(sample_ID, c_k, centroid_id="median"){
   # Getting the specific tensor to apply
-  tensor <- drug.effect.tensors[[paste0("ID_", centroid_id)]][[c_k]][,target_drug]
-  # Creating a dataframe similar in shape to OOL_data with the drug effect as values instead of the actual values of the feature
-  effect.matrix <- data.frame(matrix(tensor, 
-                                     ncol = length(rownames(OOL_data)), 
-                                     nrow = nrow(tensor),
-                                     dimnames = list(rownames(drug.effect.tensor), rownames(OOL_data)))) %>%
-                    rbind(data.frame(matrix(0,
-                                            nrow = ncol(OOL_data) - nrow(tensor),
-                                            ncol = length(rownames(OOL_data)),
-                                            dimnames = list(setdiff(colnames(OOL_data), rownames(tensor)), 
-                                                            rownames(OOL_data))))) %>%
-                    t() %>%
-                    as.data.frame() %>%
-                    dplyr::select(all_of(colnames(OOL_data)))
-  
-    # Applying the effect.matrix to the OOL_data
-    return(effect.matrix + OOL_data)
+  tensor <- drug.effect.tensors[[paste0("ID_", centroid_id)]][[c_k]] %>% t %>% as.data.frame()
+  # Getting the data from the sample
+  patient_data <- OOL_data[sample_ID,]
+  # Extending the tensor to have the same columns as patient_data
+  extended_tensor=cbind(tensor, 
+                        data.frame(matrix(0, 
+                                          nrow=1, 
+                                          ncol=length(setdiff(colnames(patient_data), colnames(tensor))), 
+                                          dimnames=list(NULL, setdiff(colnames(patient_data), colnames(tensor))))))
+  # Joining patient_data and tensor
+  patient_and_tensor=rbind(patient_data, extended_tensor)
+  # Simulating each drug effect on the sample
+  for (drug in rownames(patient_and_tensor)){
+    if (drug != sample_ID){
+      patient_and_tensor[drug,] <- patient_and_tensor[sample_ID,] + patient_and_tensor[drug,] 
+    }
+  }
+  # Removing original sample data
+  simulated_data <- patient_and_tensor[!(rownames(patient_and_tensor) %in% c(sample_ID)),]
+  # Adding the information about the tensor applied
+  simulated_data <- cbind(data.frame(row.names = rownames(simulated_data), 
+                                     centroid = rep(centroid_id, length(rownames(simulated_data))),
+                                     dose = rep(10^(c_k-1), length(rownames(simulated_data))),
+                                     sampleID = rep(sample_ID, length(rownames(simulated_data)))),
+                          simulated_data) %>%
+                    rownames_to_column("drug")
+  return(simulated_data)
 }
 ```
 
-Saving the data with the simulated effect
+Simulating the median effect on all the patients
 
 ```{r}
-all.simulated.data <- data.frame(ID = character(),
-                                 drug = character(),
-                                 feature = character(),
-                                 value = double(),
-                                 stringsAsFactors = FALSE)
-for (target_drug in colnames(drug.effect.tensor)){
-  simulated.OOL <- apply.effect.matrix(target_drug, type) %>%
-                  rownames_to_column(var = "ID") %>%
-                  pivot_longer(cols = -ID, names_to = "feature", values_to = "value") %>%
-                  mutate(drug = target_drug)
-  all.simulated.data <- rbind(all.simulated.data, simulated.OOL)
+# Progress bar
+pb <- txtProgressBar(min = 0, max = 4*length(rownames(OOL_data)), style = 3)
+i <- 0
+
+# Applying simulate.sample.data.under.all.drugs to all the samples with all concentrations
+median.simulated.data <- c()
+for (sample_ID in rownames(OOL_data)){
+  for (c_k in 1:4){
+    # Progress bar
+    setTxtProgressBar(pb, i)
+    # Simulating new data
+    simulated.data <- simulate.sample.data.under.all.drugs(sample_ID, c_k)
+    # Aggregating the new simulated data
+    median.simulated.data <- rbind(median.simulated.data, simulated.data)
+    # Incremental for progress bar
+    i <- i+1
+  }
 }
-all.simulated.data <- pivot_wider(all.simulated.data, names_from="feature", values_from="value")
 
-# Creating a new directory for simulated data
-new_dir <- paste0(OOL_path, "/Simulated Data")
-if(!file.exists(new_dir)){dir.create(new_dir, recursive=TRUE)}
+# Creating a new directory
+if(!file.exists(paste0(OOL_path, "/Simulated Data"))){dir.create(paste0(OOL_path, "/Simulated Data"), recursive = TRUE)}
 
-# Saving the stimulated data
-save(all.simulated.data, file=paste0(new_dir, "/immunome_noEGA_OOL_with_drugs.rda"))
+# Saving the simulated data
+save(median.simulated.data, file=paste0(OOL_path, "/Simulated Data/median simulated data.rda"))
+```
+
+Simulating the individual effect on all the patients by selecting a specific tensor based on the clustering results
+
+```{r}
+# Progress bar
+pb <- txtProgressBar(min = 0, max = 4*length(rownames(OOL_data)), style = 3)
+i <- 0
+
+# Applying simulate.sample.data.under.all.drugs to all the samples with all concentrations
+individual.simulated.data <- c()
+for (sample_ID in rownames(OOL_data)){
+  for (c_k in 1:4){
+    # Progress bar
+    setTxtProgressBar(pb, i)
+    # Extracting patient ID
+    patient_id <- gsub("P(\\d+)_.*", "\\1", sample_ID)
+    # Getting the centroid corresponding to the ID
+    centroid_id <- which(sapply(clusters, function(vec) patient_id %in% vec))
+    # Simulating new data
+    simulated.data <- simulate.sample.data.under.all.drugs(sample_ID, c_k, centroid_id)
+    # Aggregating the new simulated data
+    individual.simulated.data <- rbind(individual.simulated.data, simulated.data)
+    # Incremental for progress bar
+    i <- i+1
+  }
+}
+
+# Creating a new directory
+if(!file.exists(paste0(OOL_path, "/Simulated Data"))){dir.create(paste0(OOL_path, "/Simulated Data"), recursive = TRUE)}
+
+# Saving the simulated data
+save(individual.simulated.data, file=paste0(OOL_path, "/Simulated Data/individual simulated data.rda"))
 ```
 
 ## Visualization of drug tensor
@@ -437,10 +485,3 @@ for (id in ids) {
   }
 }
 ```
-
-
-
-
-
-
-

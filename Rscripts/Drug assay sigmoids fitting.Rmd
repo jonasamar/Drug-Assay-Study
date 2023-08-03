@@ -7,13 +7,11 @@ Here we want to quantify the effect of the drugs on each feature. To do that, we
 
 ## Paths
 
-**Copy Paste Here the path to your Drug-Assay-Study folder**
+Here we set all the necessary paths to import and save data and plots.
 
 ```{r}
-my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
-```
-
-```{r}
+current_dir <- getwd()
+my_path <- sub("/[^/]+$", "", current_dir)
 setwd(paste0(my_path,"/Rscripts"))
 drug_assay_path=paste0(my_path,"/Drug assay data")
 plot_path=paste0(my_path,"/Plots/Drug Assay data visualization")

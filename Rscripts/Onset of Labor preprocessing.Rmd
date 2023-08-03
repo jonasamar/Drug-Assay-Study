@@ -4,13 +4,11 @@ output: html_notebook
 ---
 ## Paths
 
-**Copy Paste Here the path to your Drug-Assay-Study folder**
+Here we set all the necessary path to import and save data and plots.
 
 ```{r}
-my_path<-"/Users/jonasamar/Desktop/Drug-Assay-Study"
-```
-
-```{r}
+current_dir <- getwd()
+my_path <- sub("/[^/]+$", "", current_dir)
 setwd(paste0(my_path,"/Rscripts"))
 funct_path=paste0(my_path,"/Onset of Labor data/Onset of Labor Initial Data/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv")
 path_to_penalization_file=paste0(my_path,"/Onset of Labor data/Onset of Labor Initial Data/penalization matrix drug assay.xlsx")
@@ -32,6 +30,7 @@ library(dplyr)
 library(viridis)
 library(readxl)
 library(tidyr)
+library(stringr)
 ```
 
 ## Restructuring the Data
@@ -122,6 +121,8 @@ im_noEGA_DOS = merge(x, dplyr::select(TTL, "DOS"), by = "ID")
 im_EGA = merge(x, dplyr::select(TTL, "EGA"), by = "ID")
 # Dataset with EGA qnd DOS
 im_EGA_DOS = merge(x, dplyr::select(TTL, c("EGA", "DOS")), by = "ID")
+# Dataset containing the patient ID (for LeaveOneGroupOut cross validation)
+Id <- dplyr::select(x, ID) %>% dplyr::mutate(patientID = as.factor(str_extract(ID, "(?<=P)\\d+")))
 ```
 
 Saving the datasets.
@@ -131,13 +132,14 @@ write.csv(im_noEGA, paste0(out_path, "/immunome_noEGA_OOL.csv"), row.names=FALSE
 write.csv(im_noEGA_DOS, paste0(out_path, "/immunome_noEGA_DOS_OOL.csv"), row.names=FALSE)
 write.csv(im_EGA, paste0(out_path, "/immunome_EGA_OOL.csv"), row.names=FALSE)
 write.csv(im_EGA_DOS, paste0(out_path, "/immunome_EGA_DOS_OOL.csv"), row.names=FALSE)
+write.csv(Id, paste0(out_path, "/patientID.csv"), row.names=FALSE)
 ```
 
 Creating separated csv files for the outcomes (DOS) and EGA.
 
 ```{r}
 DOS = subset(TTL, select = c(ID, DOS))
-EGA = subset(TTL, select = c(EGA, ID))
+EGA = subset(TTL, select = c(ID, EGA))
 write.csv(DOS, paste0(out_path, "/outcome_OOL.csv"), row.names=FALSE)
 write.csv(EGA, paste0(out_path, "/EGA_OOL.csv"), row.names=FALSE)
 ```
