@@ -4,7 +4,7 @@ output: html_notebook
 ---
 
 Here we are building tensors for each drug and each concentration to simulate the effect of a drug on a given sample.
-The asumptions are:
+The assumptions are:
 1 - the individual sigmoids represent the drug effect on the individual level
 2 - the median sigmoids represent an overall effect of the drug
 3 - the effect of the drug doesn't depend on the time it is applied to the pregnant woman
@@ -43,10 +43,10 @@ library(grid)
 
 ## Drug effect tensors
 
-For a given drug, the drug effect tensor is a dataframe with two columns :
-1 - the name of the features
-2 - the effect of the drug on the feature which going to be calculated as follow
+A drug effect tensor aims at gathering in a unique table an estimated effect of a drug at a certain concentration on a certain feature. Here is the formula of how the effect is calculated based on our data :
+
 $$effect_{i,j,k} \: = z^{-1}_{OOL,i}(z_{DA,i}(\sigma^p_{i,j}(C_{k})) - z^{-1}_{OOL,i}(z_{DA,i}(\sigma^p_{i,j}(0)) \: = \:  (\sigma^p_{i,j}(C_{k}) - \sigma^p_{i,j}(0)) \frac{\Sigma_{OOL,i}}{\Sigma_{DA,i}}$$
+
 where $\sigma^p_{i,j}$ is the the sigmoid function built on feature i when exposed to drug j for patient p ($p \in \{1, 2, 3, 4, median\}$), $(C_{k})$ is the drug concentration tested for which we calculate the effect ($k \in \{1, 10, 100, 1000\}$), $z_{DA,i}()$ is the z scoring function on the drug assay data for feature i and $z^-1_{OOL,i}()$ is the inverted z scoring function on the OOL data for feature i, $\Sigma_{OOL,i}$ is the standard deviation of the OOL values for feature i and $\Sigma_{DA,i}$ is the standard deviation of the drug assay values for feature i.
 
 Importing sigmoid functions and data
@@ -76,7 +76,7 @@ Tensors
 Drugs <- unique(AllPenDoseresponse$drug)
 features <- unique(AllPenDoseresponse$feature)
 
-# Sigmoid function we want to fit
+# Sigmoid function we fitted on our data
 sigmoid_function <- function(x, b, c, d, e) {
   c + (d - c) / (1 + exp(-b * (x - e)))
 }
@@ -175,10 +175,10 @@ OOL_data <- dplyr::select(OOL_data, -DOS)
 DOS <- original.OOL_data$DOS
 ```
 
-Function building and applying drug effect matrix on the OOL_data
+Function applying drug effect tensor to the onset of labor data.
 
 ```{r}
-simulate.sample.data.under.all.drugs <- function(sample_ID, c_k, centroid_id="median"){
+simulate.sample.data.with.drug.effect <- function(sample_ID, c_k, centroid_id="median"){
   # Getting the specific tensor to apply
   tensor <- drug.effect.tensors[[paste0("ID_", centroid_id)]][[c_k]] %>% t %>% as.data.frame()
   # Getting the data from the sample
@@ -224,7 +224,7 @@ for (sample_ID in rownames(OOL_data)){
     # Progress bar
     setTxtProgressBar(pb, i)
     # Simulating new data
-    simulated.data <- simulate.sample.data.under.all.drugs(sample_ID, c_k)
+    simulated.data <- simulate.sample.data.with.drug.effect(sample_ID, c_k)
     # Aggregating the new simulated data
     median.simulated.data <- rbind(median.simulated.data, simulated.data)
     # Incremental for progress bar
@@ -257,7 +257,7 @@ for (sample_ID in rownames(OOL_data)){
     # Getting the centroid corresponding to the ID
     centroid_id <- which(sapply(clusters, function(vec) patient_id %in% vec))
     # Simulating new data
-    simulated.data <- simulate.sample.data.under.all.drugs(sample_ID, c_k, centroid_id)
+    simulated.data <- simulate.sample.data.with.drug.effect(sample_ID, c_k, centroid_id)
     # Aggregating the new simulated data
     individual.simulated.data <- rbind(individual.simulated.data, simulated.data)
     # Incremental for progress bar
@@ -330,7 +330,7 @@ target_drug = "Lansoprazole" # Cefotaxime or Lansoprazole or Iopamidol or Iohexo
 test.drug.tensor <- drug.tensor(id, target_drug, c_k)
 ```
 
-Here we are doing one of the 100 plots that are going to be build for each drug so that we can plot the legend as well. Each node represent a reagent and its color is indicating how much it is inhibited or activated by the drug at the given concentration. 
+Here we are doing one of the 100 plots that are going to be build for each drug so that we can plot the legend as well. Each node represent a reagent and its color is indicating how much it is inhibited or activated by the drug at the given concentration. You can look at the plot in the folder /Plots/Drug effect tensors.
 
 ```{r}
 # Example of settings for the plot
@@ -367,7 +367,7 @@ p <- ggplot(df, aes(x = x, y = y)) +
 ggsave(paste0(plot_path, "/legend_grid_effect_plot.png"), plot = p, width = 10, height = 8)
 ```
 
-Plotting a grid composed of subplots like the one above for every population and avery stimulation and each drug
+Plotting a grid composed of subplots like the one above for every population and every stimulation and each drug.
 
 ```{r}
 # Useful variables (we rewrite them because the order is important for the figures)
@@ -400,7 +400,7 @@ plot_drug_grid_effect <- function(target_drug, id, c_k){
         geom_point(aes(fill = effect), size=7.5, shape = 21) +
         # Scale of the color of the nodes
         scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1, 1)) +
-        # Adding a border to the figure if there are features of interest inside
+        # Adding a border to the figure
         geom_rect(aes(xmin = 0.04, xmax = 0.18, ymin = 0.02, ymax = 0.18),
                   fill = NA,
                   color = "black",
@@ -459,7 +459,7 @@ plot_drug_grid_effect <- function(target_drug, id, c_k){
 }
 ```
 
-Creating the figures for all the Id, drug, concentrations combinations
+Creating the figures for all the Id, drug, concentrations combinations (You can look at the plots in the folder /Plots/Drug effect tensors).
 
 ```{r}
 # Creating and saving the figures in pdf files

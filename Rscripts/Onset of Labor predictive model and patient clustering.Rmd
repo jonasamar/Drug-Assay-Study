@@ -1,5 +1,5 @@
 ---
-title: "Onset of Labor model training"
+title: "Onset of Labor predictive model and patients clustering"
 output: html_notebook
 ---
 
@@ -136,15 +136,26 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   }
   if(parm$scale=='Patient')
   {
+    #NEW#
+    sclidx= which(foldid==unique(foldid)[i])
+    if(length(sclidx)>1){
+      patient.col.means = colMeans(X[sclidx,]) # Storing means to apply same scaling to simulated data
+    }
+    #####
     for(ap in seq(length(unique(foldid))))
     {
       sclidx= which(foldid==unique(foldid)[ap])
       if(length(sclidx)>1)
         X[sclidx]=scale(X[sclidx], scale=F)
     }
+    # print('------------')
+    # print(patient.col.means[["Tregs_STAT6_IL246"]])
+    # print(length(patient.col.means))
+    # print(class(patient.col.means))
+    # print('------------')
+    original.X=X # Keeping a copy of X without any columns removed and before scaling
     X=scale(X) #creates NA values for 10 features
     rm_columns <- which(colSums(is.na(X)) > 0) # Getting the columns that are removed
-    original.X=X # Keeping a copy of X without any columns removed
     X=X[, complete.cases(t(X))] #we remove those features
   }
   # Calculate Spearman's rank correlation and p-value
@@ -214,6 +225,18 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   ret$rd_forest_importance = rd_forest_cv$importance
   
   if (predict.simulated.data){
+    # Getting X before scaling but only with the features which were filtered
+    unscaled.X = original.X[,!(colnames(original.X) %in% ret$rm_cols)]
+    means = colMeans(unscaled.X)
+    # print('------------')
+    # print(means[["Tregs_STAT6_IL246"]])
+    # print(length(means))
+    # print('------------')
+    sds = colSds(unscaled.X)
+    # print('------------')
+    # print(sds[["Tregs_STAT6_IL246"]])
+    # print(length(sds))
+    # print('------------')
     # Filtering the samples of the patients in the test set
     ret$median.simulated.TTL <- subset(median.simulated.data, grepl(paste0("P",unique(foldid)[i],"_"),sampleID))
     ret$individual.simulated.TTL <- subset(individual.simulated.data, grepl(paste0("P",unique(foldid)[i],"_"),sampleID))
@@ -224,6 +247,8 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
         dplyr::select(intersect(colnames(CYTOF),colnames(ret$median.simulated.TTL)), -names(ret$rm_cols)) %>%
         # Imputing the missing values with the medians of the corresponding CYTOF columns
         mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
+        # Applying the patient and gobal scaling applyed to the training data
+        mutate(across(everything(), ~ (. - patient.col.means[[cur_column()]] - means[[cur_column()]])/sds[[cur_column()]])) %>%
         # Converting to a matrix
         as.matrix()
     
@@ -233,6 +258,8 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
         dplyr::select(intersect(colnames(CYTOF),colnames(ret$individual.simulated.TTL)), -names(ret$rm_cols)) %>%
         # Imputing the missing values with the medians of the corresponding CYTOF columns
         mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
+        # Applying the patient and gobal scaling applyed to the training data
+        mutate(across(everything(), ~ (. - patient.col.means[[cur_column()]] - means[[cur_column()]])/sds[[cur_column()]])) %>%
         # Converting to a matrix
         as.matrix()
 
@@ -265,6 +292,7 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
 
   return(ret)
 }
+ret <- xxx(data.matrix(CYTOF), Yh, Id, 10, parm, TRUE)
 ```
 
 Prediction of the model
@@ -346,7 +374,7 @@ colnames(listr) <- c("pval_threshold", "n_rm_cols", names(list_preds), "best_r_s
 save(listr, file=(paste0(out_path, "/Pvalue threshold optimization.rda")))
 ```
 
-Plotting the best pvalue threshold with their corresponding best spearmanr
+Plotting the best pvalue threshold with their corresponding best spearmanr (you can look at the plot in the folder /Plots/Onset of labor prediction model)
 
 ```{r}
 # listr
@@ -388,7 +416,7 @@ p
 dev.off()
 ```
 
-Creating a list of the best 
+Creating a list of the best pvalue thresholds
 
 ```{r}
 best_pval_thresholds <- list("Lasso.1se"=best_lasso_threshold, 
@@ -454,7 +482,7 @@ stopCluster(cl)
  
 ## Evaluation of results
 
-Visualization of the performances of the models.
+Visualization of the performances of the models (you can look at the plot in the folder /Plots/Onset of labor prediction model).
 
 ```{r}
 # X axis
@@ -527,21 +555,21 @@ for (model.name in names(best_pval_thresholds)){
 
 ```{r}
 # Model chosen
-model.name = "ElasticNet" # ElasticNet or Ridge.Regression or Lasso.1se or Adaptive.Lasso
+model.name = "Random.Forest" # ElasticNet or Ridge.Regression or Lasso.1se or Adaptive.Lasso or Random.Forest
 # list_preds
 load(paste0(out_path, "/best ", model.name," predictions.rda"))
 # prdC
 load(paste0(out_path, "/best ", model.name,".rda"))
 # key to fetch the model's coefs in prdC
-if (parm$predict.model == "Random.Forest"){
+if (model.name == "Random.Forest"){
   coef_key <- "rd_forest_importance"
-}else if(parm$predict.model == "ElasticNet"){
+}else if(model.name == "ElasticNet"){
   coef_key <- "EN_coef"
-}else if(parm$predict.model == "Lasso.1se"){
+}else if(model.name == "Lasso.1se"){
   coef_key <- "coef"
-}else if(parm$predict.model == "Ridge.Regression"){
+}else if(model.name == "Ridge.Regression"){
   coef_key <- "ridge_coef"
-}else if(parm$predict.model == "Adaptive.Lasso"){
+}else if(model.name == "Adaptive.Lasso"){
   coef_key <- "alasso_coef"
 }else{
   coef_key <- NULL
@@ -563,11 +591,20 @@ rm_cols <- unique(rm_cols)
 Creation of the feature index
 
 ```{r}
-feature.index <- data.frame(feature = character(),
+if (model.name=="Random.Forest"){
+  feature.index <- data.frame(feature = character(),
                             pval = double(),
                             mean_abs_coef = double(),
                             model_index = double(),
                             stringsAsFactors = FALSE)
+}else{
+  feature.index <- data.frame(feature = character(),
+                            pval = double(),
+                            mean_relative_node_purity = double(),
+                            model_index = double(),
+                            stringsAsFactors = FALSE)
+}
+
 cols <- colnames(CYTOF[,-rm_cols])
 
 for (i in seq(1, length(cols))){
@@ -575,20 +612,39 @@ for (i in seq(1, length(cols))){
   feature <- cols[i]
   # P value based on a spearman test
   pval <- cor.test(Yh, CYTOF[[feature]], method = 'spearman', exact = FALSE)$p.value
-  # Collecting all the absolute values of the coefficients of the model
-  coefs <- c()
-  for (iter in seq(prdC)){
-    coefs[iter] <- abs(prdC[[iter]][[coef_key]][i])
+  # Coefficient of relative node purity given by the model
+  if (model.name=="Random.Forest"){
+    # Collecting all the node purity of the selected features
+    relative_node_purity <- c()
+    for (iter in seq(prdC)){
+      relative_node_purity[iter] <- prdC[[iter]][[coef_key]][feature,"IncNodePurity"]/
+        max(prdC[[iter]][[coef_key]][,"IncNodePurity"])
+    }
+    # Mean of the relative node purity
+    mean_relative_node_purity <- mean(relative_node_purity)
+    # Adding the feature to feature.index
+    feature.index <- rbind(feature.index,
+                           data.frame(feature=feature,
+                                      pval=pval,
+                                      mean_relative_node_purity=mean_relative_node_purity,
+                                      model_index=-mean_relative_node_purity*log10(pval),
+                                      stringsAsFactors = FALSE))
+  }else{
+    # Collecting all the absolute values of the coefficients of the model
+    coefs <- c()
+    for (iter in seq(prdC)){
+      coefs[iter] <- abs(prdC[[iter]][[coef_key]][i])
+    }
+    # Mean of the coefficients
+    mean_abs_coef <- mean(coefs)
+    # Adding the feature to feature.index
+    feature.index <- rbind(feature.index,
+                           data.frame(feature=feature,
+                                      pval=pval,
+                                      mean_abs_coef=mean_abs_coef,
+                                      model_index=-abs(mean_abs_coef)*log10(pval),
+                                      stringsAsFactors = FALSE))
   }
-  # Mean of the coefficients
-  mean_abs_coef <- mean(coefs)
-  # Adding the feature to feature.index
-  feature.index <- rbind(feature.index,
-                         data.frame(feature=feature,
-                                    pval=pval,
-                                    mean_abs_coef=mean_abs_coef,
-                                    model_index=-abs(mean_abs_coef)*log10(pval),
-                                    stringsAsFactors = FALSE))
 }
 feature.index <- feature.index %>% arrange(desc(model_index))
 feature.index
@@ -666,9 +722,9 @@ centroids <- drug_assay_unstim_0 %>%
 # Joining the TTL prediction and the Id of the patients to the CYTOF data
 OOL_data <- read_csv(paste0(OOL_path, "/Preprocessed Data/immunome_EGA_pen_OOL.csv"), show_col_types = FALSE)
 OOL_unstim <- OOL_data[, (grepl("unstim", colnames(OOL_data)) & (colnames(OOL_data) %in% rownames(centroids)))] %>%
-                cbind(data.frame("TTL"=list_preds[[parm$predict.model]], "ID"=Id))
+                cbind(data.frame("TTL"=list_preds[[model.name]], "ID"=Id))
 # OOL_stim <- OOL_data[, colnames(OOL_data) %in% rownames(centroids)] %>%
-#                 cbind(data.frame("TTL"=list_preds[[parm$predict.model]], "ID"=Id))
+#                 cbind(data.frame("TTL"=list_preds[[model.name]], "ID"=Id))
 
 # Normalization of the data
 for (target_feature in rownames(centroids)){
@@ -736,7 +792,7 @@ data_points <- rbind(data_points,
                      centroids[!(rownames(centroids) %in% c("TTL")),] %>% t() %>% cbind(matrix(c(1, 2, 3, 4), ncol=1, nrow=4, dimnames=list(NULL, "cluster"))))
 ```
 
-Plotting the clusters
+Plotting the clusters (you can look at the plot in the folder /Plots/Clustering)
 
 ```{r}
 # Filter out variables with variance not equal to zero
@@ -752,7 +808,7 @@ res.comp <- imputePCA(data, ncp = nb$ncp)
 
 # Using PCA to project the points on a 2D surface
 imp <- cbind.data.frame(res.comp$completeObs,patient_clusters)
-res.pca <- PCA(imp, quanti.sup = 1, quali.sup = 13, ncp = nb$ncp, graph=FALSE)
+res.pca <- PCA(imp, quanti.sup = 1, quali.sup = dim(imp)[2], ncp = nb$ncp, graph=FALSE)
 
 # Dataframes for plot
 projected_coord <- cbind(res.pca$ind$coord[,c("Dim.1", "Dim.2")], patient_clusters) 
@@ -771,8 +827,8 @@ p1 <- ggplot() +
   geom_point(data=df_coord, aes(x=Dim.1, y=Dim.2, color=patient_clusters, shape="OOL patients")) +
   scale_shape_manual(name = "Patients", values = c("OOL patients" = 21, "Drug assay centroids" = 8)) +
   guides(shape = guide_legend(title = "Patients", order=2), color=guide_legend(title = "Clusters", order=1)) +
-  scale_x_continuous(limits=c(-5, 5), expand=c(0., 0.)) +
-  scale_y_continuous(limits=c(-3, 3), expand=c(0., 0.)) +
+  #scale_x_continuous(limits=c(-5, 5), expand=c(0., 0.)) +
+  #scale_y_continuous(limits=c(-3, 3), expand=c(0., 0.)) +
   ggtitle("Projection of patient clustering on 2 first dimensions of PCA analysis") +
   theme_minimal()
 
@@ -781,8 +837,8 @@ p2 <- ggplot() +
   geom_point(data=df_centroid, aes(x=Dim.1, y=Dim.2, color=patient_clusters, shape="Drug assay centroids"), size=3) +
   scale_shape_manual(name = "Patients", values = c("OOL patients" = 21, "Drug assay centroids" = 8)) +
   guides(shape = guide_legend(title = "Patients", order=2), color=guide_legend(title = "Clusters", order=1)) +
-  scale_x_continuous(limits=c(-5, 5), expand=c(0., 0.)) +
-  scale_y_continuous(limits=c(-3, 3), expand=c(0., 0.)) +
+  #scale_x_continuous(limits=c(-5, 5), expand=c(0., 0.)) +
+  #scale_y_continuous(limits=c(-3, 3), expand=c(0., 0.)) +
   ggtitle("Projection of centroids on 2 first dimensions of PCA analysis") +
   theme_minimal()
 
@@ -803,9 +859,10 @@ All simulated predictions
 ```{r}
 all.simulated.predictions <- c()
 for (i in 1:length(prdC)){
-  all.simulated.predictions <- rbind(all.simulated.predictions, prdC[[i]]$median.simulated.TTL, prdC[[i]]$individual.simulated.TTL)
+  all.simulated.predictions <- rbind(all.simulated.predictions, 
+                                     prdC[[i]]$median.simulated.TTL %>% rename("TTL.prediction"="median_predictions"), 
+                                     prdC[[i]]$individual.simulated.TTL %>% rename("TTL.prediction"="individual_predictions"))
 }
-colnames(all.simulated.predictions) <- c("drug", "sampleID", "centroid", "dose", "TTL.prediction")
 ```
 
 Function plotting the distributions of the differences between estimated TTL and estimated TTL with simulated effect of the 15 drugs at concentration c_k (with c_k in {1, 2, 3, 4}) clustered around centroid.val (with centroid.val in {1, 2, 3, 4, median}).
@@ -857,7 +914,7 @@ if (!file.exists(paste0(my_path, "/Plots/Drug effect delay distributions"))){dir
 for (centroid.val in unique(all.simulated.predictions$centroid)){
   pdf(paste0(my_path, "/Plots/Drug effect delay distributions/Delay distribution for ", ifelse(centroid.val=="median","median effect", paste("cluster",centroid.val)), ".pdf"))
   for (c_k in 1:4){
-    plot_delay_distribution(c_k, centroid.val, 38, 38.3)
+    plot_delay_distribution(c_k, centroid.val, 25, 40)
   }
   dev.off()
 }
@@ -901,7 +958,6 @@ plot_delay_distribution_across_clusters <- function(target_drug, c_k, EGA.inf=0,
     xlab("Delay (in days)") +
     geom_vline(xintercept = 0, linetype = "dashed") +
     ggtitle(paste0("Dose ", 10^(c_k-1))) +
-    scale_x_continuous(limits=c(-15, 15)) +
     theme_minimal()
   plot(p)
 }
@@ -910,8 +966,8 @@ plot_delay_distribution_across_clusters <- function(target_drug, c_k, EGA.inf=0,
 if (!file.exists(paste0(my_path, "/Plots/Drug effect delay distributions"))){dir.create(paste0(my_path, "/Plots/Drug effect delay distributions"))}
 
 # Plotting the best drug concentration effect on the different clusters
-target_drug = "Progesterone"
-c_k = 2
+target_drug = "Cefotaxime"
+c_k = 4
 
 pdf(paste0(my_path, "/Plots/Drug effect delay distributions/Delay distribution for ", target_drug, " dose=", 10^(c_k-1), " across 4 clusters.pdf"))
 plot_delay_distribution_across_clusters(target_drug, c_k, 30, 40)

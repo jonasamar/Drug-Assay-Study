@@ -25,18 +25,19 @@ We strongly advice to also use R Studio to go through all the scripts and their 
 
 ## R scripts order
 
-This file is here to explain the order in which one should run the multiple R/Rmd files (when values are equals it means it doesn't matter which one is first):
+This file is here to explain the order in which one should run the multiple R/Rmd files in this folder :
 
 0 - install.R
 
 1 - Onset of Labor preprocessing
-2 - Onset of Labor curves classification
-3 - Onset of Labor feature index and patient clustering (except section Simulated drug effect visualization)
+2 - Onset of Labor curves classification (except two last plots)
+3 - Drug assay preprocessing
+4 - Onset of Labor predictive model and patients clustering (except last section Simulated drug effect visualization)
 
-4 - Drug assay preprocessing
 5 - Drug assay data visualization
 6 - Drug assay sigmoids fitting
+
 7 - Drug assay drug tensors
 
 8 - Drug assay scores and visualization
-9 - Onset of Labor feature index and patient clustering (all sections)
+9 - Onset of Labor feature index and patient clustering (sections : Paths, Libraries, Importing and preprocessing data, Importing selected model and its predictions, Visualization of simulated drug effect)

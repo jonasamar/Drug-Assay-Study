@@ -3,7 +3,7 @@ title: "Onset of Labor curves classification"
 output: html_notebook
 ---
 
-This is script has been taken from the original OOL Study and modified to retrieve results of interests to the drug assay study : the behavior/ trend of the features in normal pregnancy.
+This is script has been partially taken from the original OOL Study and modified to retrieve results of interests to the drug assay study : the behavior/ trend of the features in normal pregnancy.
 
 ## Paths
 
@@ -37,7 +37,7 @@ library(gridExtra)
 
 ## Script settings
 
-Selecting if you want the following script to fit models on DOS or EGA and if you want to fit on term, preterm or all the data.
+Selecting if you want the following script to fit functions of DOS or EGA and if you want to fit on term, preterm or all the data.
 
 ```{r}
 mode <- "EGA" #EGA or DOS
@@ -49,9 +49,11 @@ cohort <- "all" #preterm or term or all
 Importing the data
 
 ```{r}
+# Onset of Labor data
 data <- read.csv(funct_path)
 preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
-# removing the datapoints that are post partum
+
+# Removing the datapoints that are post partum and filtering all, preterm or term patients
 if (cohort=="all"){
   data <- data %>% dplyr::filter(DOS <= 0)
 }
@@ -64,14 +66,15 @@ if (cohort=="term"){
   data <- data[!apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
 }
 
-# timepoints
+# Timepoints
 DOS = data$DOS
 EGA = data$EGA
-# timepoints squared
+
+# Timepoints squared
 data$DOS2 = DOS^2
 data$EGA2 = EGA^2
 
-# names of the immunome features
+# Names of the immunome features
 cytof <- setdiff(colnames(data), c("DOS", "DOS2", "EGA", "EGA2", "ID"))
 ```
 
@@ -85,7 +88,7 @@ cytof <- setdiff(colnames(data), c("DOS", "DOS2", "EGA", "EGA2", "ID"))
 - the pattern of the best model (accelerating/decelrating and increasing/decreasing)
 
 ```{r}
-# Initializing the variables
+# Initializing variables
 cv_lin = c()
 best = c()
 cv_both = c()
@@ -184,7 +187,7 @@ if (mode=="EGA"){
 
 ## Visualization
 
-We are going to plot the best features according to the OOL paper
+We are plotting the best features according to the OOL paper
 
 ```{r}
 feature_list <- c("CD56loCD16posNK_STAT1_IFNa",
@@ -208,7 +211,7 @@ feature_list <- c("CD56loCD16posNK_STAT1_IFNa",
                   "pDCs_MAPKAPK2_unstim")
 ```
 
-Plot
+Plot (you can look at this plot in your folder /Plots/Onset of Labor curve classification)
 
 ```{r}
 if (mode=="DOS"){
@@ -266,22 +269,23 @@ for (i in 0:floor(length(plots)/16)){
 dev.off()
 ```
 
-Plotting term and preterm features as functions of EGA on the same figures.
+**The following plots requires that you've already run "Onset of Labor feature index and patient clustering.Rmd"**
 
-```{r}
-# Importing OOL data
-data <- read.csv(funct_path) %>% filter(DOS <= 0)
-# feature.index
-load(paste0(OOL_path, "/Prediction model/feature_index.rda"))
-# Selecting the features with index > 0
-feature_list <- feature.index[feature.index$model_index > 0, "feature"]
-```
+Plotting term and preterm features as functions of EGA on the same figures (you can look at this plot in your folder /Plots/Onset of Labor curve classification).
 
 ```{r}
 # Variable settings
 preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
 mode="EGA"
+
+# Importing OOL data
+data <- read.csv(funct_path) %>% filter(DOS <= 0)
+# EGA
 EGA=data$EGA
+# feature.index
+load(paste0(OOL_path, "/Prediction model/feature_index.rda"))
+# Selecting the features with index > 0
+feature_list <- feature.index[feature.index$model_index > 0, "feature"]
 
 # Preterm data, models and summary
 load(paste0(out_path, "/preterm_pen_model_curves_cytof_on_EGA.rda"))
@@ -366,3 +370,127 @@ for (i in 0:floor(length(plots)/16)){
 dev.off()
 ```
 
+Plotting term and preterm features as functions of EGA on the same figures with the assumption that term and preterm functions should be the same with a time delay (you can look at this plot in your folder /Plots/Onset of Labor curve classification).
+
+```{r}
+# Variable settings
+preterm_ID <- c("P17_","P8_","P3_","P5_","P27_")
+mode="EGA"
+
+# Importing OOL data
+data <- read.csv(funct_path) %>% filter(DOS <= 0)
+# EGA
+EGA=data$EGA
+# feature.index
+load(paste0(OOL_path, "/Prediction model/feature_index.rda"))
+# Selecting the features with index > 0
+feature_list <- feature.index[feature.index$model_index > 0, "feature"]
+
+# Preterm data
+preterm_data=data[apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
+preterm_EGA=preterm_data$EGA
+
+# Term data, models and summary
+load(paste0(out_path, "/term_pen_model_curves_cytof_on_EGA.rda"))
+df_term_models=df_models
+df_term_sum=read.csv(file=paste0(out_path,"/term_pen_classification_curves_cytof_on_EGA.csv"))
+term_data=data[!apply(data, 1, function(row) any(grepl(paste(preterm_ID, collapse = "|"), row["ID"]))), ]
+term_EGA=term_data$EGA
+
+# Function to calculate the sum of squared residuals for linear or quadratic functions
+sum_squared_residuals <- function(translation, class, coefficients, x, y) {
+  if (class=="quadratic"){
+    a <- coefficients[1]
+    b <- coefficients[2]
+    c <- coefficients[3]
+    residuals <- (a * (x-translation)^2 + b * (x-translation) + c) - y
+    return(sum(residuals^2))
+  }else if (class=="linear"){
+    a <- coefficients[1]
+    b <- coefficients[2]
+    residuals <- (a * (x-translation) + b) - y
+    return(sum(residuals^2))
+  }else{
+    return(NULL)
+  }
+}
+
+# Plots
+plots <- list()
+for (target_feature in feature_list) {
+  # PRETERM
+  # Building the model which is going to fit best preterm data according to 
+  coefs <- df_term_models[df_term_models$feature == target_feature,]$model[[1]][[1]]
+  # Building the predictions
+  y_preterm <- preterm_data[, target_feature]
+  intercept <- coefs[['(Intercept)']]
+  if (length(coefs) == 3){ # quadratic model
+    # Coefficient from term
+    a <- coefs[[paste0(mode,2)]]
+    b <- coefs[[mode]]
+    # Find the best translation factor
+    best_translation <- suppressWarnings(optim(0, sum_squared_residuals, class = "quadratic", coefficients = c(a, b, intercept), x = preterm_EGA, y = y_preterm))
+    delay <- best_translation$par
+    # Building the preterm predictions 
+    y_pred_preterm <- intercept + b * (EGA-delay) + a * (EGA-delay)^2
+  }
+  else{ # length(coefs) == 2, linear model
+    # Coefficient from term
+    slope <- coefs[[mode]]
+    # Find the best translation factor
+    best_translation <- suppressWarnings(optim(0, sum_squared_residuals, class = "linear", coefficients = c(slope, intercept), x = preterm_EGA, y = y_preterm))
+    delay <- best_translation$par
+    # Building the preterm predictions 
+    y_pred_preterm <- intercept + slope * (EGA-delay)
+  }
+  
+  # TERM
+  coefs <- df_term_models[df_term_models$feature == target_feature,]$model[[1]][[1]]
+  # building the predictions
+  y_term <- term_data[, target_feature]
+  intercept <- coefs[['(Intercept)']]
+  if (length(coefs) == 3){ # quadratic model
+    a <- coefs[[paste0(mode,2)]]
+    b <- coefs[[mode]]
+    y_pred_term <- intercept + b * EGA + a * EGA^2
+  }
+  else{ # length(coefs) == 2, linear model
+    slope <- coefs[[mode]]
+    y_pred_term <- intercept + slope * EGA
+  }
+  
+  df_preds <- data.frame(x = EGA, y_pred_preterm = y_pred_preterm, y_pred_term = y_pred_term)
+  df_preterm_points <- data.frame(x = preterm_EGA, y = y_preterm)
+  df_term_points <- data.frame(x = term_EGA, y = y_term)
+  pval_preterm <- df_preterm_sum[df_preterm_sum$cytof == target_feature,]$pval
+  pval_term <- df_preterm_sum[df_preterm_sum$cytof == target_feature,]$pval
+  
+  # Plot
+  plot <- ggplot() +
+      geom_point(data=df_term_points, aes(x = x, y = y), fill="white", shape=1, color = "grey", size = 1., na.rm = TRUE) +
+      geom_line(data=df_preds, aes(x = x, y = y_pred_term), color = "darkgreen") +
+      geom_point(data=df_preterm_points, aes(x = x, y = y), fill="white", shape=1, color = "blue", size = 1., na.rm = TRUE) +
+      geom_line(data=df_preds, aes(x = x, y = y_pred_preterm), color = "blue") +
+      theme(plot.title = element_text(size = 6),
+            panel.background = element_rect(fill = NA, color = NA),
+            plot.background = element_rect(fill = NA, color = NA),
+            axis.title.x = element_text(size = 6),
+            axis.title.y = element_text(size = 6),
+            axis.text.x = element_text(size = 6),
+            axis.text.y = element_text(size = 6),
+            axis.line.x = element_line(),
+            axis.line.y = element_line()) +
+      ggtitle(paste(target_feature, "\n (green) term p-value = ",pval_term,"\n (blue) term p-value = ",pval_preterm, sep="")) +
+      ylab("Arcsinh ratio\nover unstim signal") +
+      xlab(mode)
+
+  plots[[target_feature]] <- plot
+}
+
+# Saving the plots
+pdf(paste(plot_path, "/best_features_plot_on_",mode,"_term_vs_preterm_with_assumption_OOL.pdf", sep=""), height=8, width=9)
+for (i in 0:floor(length(plots)/16)){
+  grid.arrange(grobs = plots[(16*i+1):min(length(plots),(16*i+16))], nrow = 4, ncol = 4)
+}
+dev.off()
+```

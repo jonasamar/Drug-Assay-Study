@@ -89,7 +89,7 @@ load(paste0(drug_assay_path, "/Drug effect tensors/drug effect tensors.rda"))
 
 Here we want to compare the drug effect on each feature to the "normal" behavior of the feature modeled in OOL study.
 
-### Auxiliaries score functions
+### Auxiliary score functions and variables
 
 **rescaled.drug.effect.tensors**
 
@@ -165,6 +165,7 @@ feature.normal.behavior.at.TTL <- function(model, pval, slope.threshold, pval.th
 # -1 when the drug is affecting the feature the same direction of its normal behavior at TTL
 # 0 when the effect of the drug is null
 # NA when behavior of the feature is null or hard to estimate (high p-value) or if we miss data in the drug assay study
+# This function is helpful to create the heatmaps in the visualization section
 
 create.drug.effect.data.frame <- function(drug.name,
                                           c_k,
@@ -271,7 +272,6 @@ Here we rank the drugs based on their effect on the chosen features of interest.
 ```{r}
 # Models of interest
 final.model <- hand.log10_1.individual.model
-final.model.type <- "individual" #"individual" or "median"
 
 # Choosing features of interest
 feature_choice <- "top_feature_index"
@@ -447,29 +447,27 @@ plot_median_sigmoid <- function(target_feature, target_drug, model_list=hand.log
 }
 ```
 
-Plotting the sigmoids of the drug on the chosen features versus the normal behavior of the OOL feature in order to see if the trends are actually opposites (or colinear) and that the chosen functions fit the data.
+Plotting the sigmoids of the drug on the chosen features versus the normal behavior of the OOL feature in order to see if the trends are actually opposites (or colinear) and that the chosen functions fit the data (the plots are accessible in the folder /Plots/Drug sigmoids vs OOL features)
 
 ```{r}
 # Time to labor of interest (will plot the derivative at this point)
 TTL <- -84
   
 for (target_drug in unique(AllPenDoseresponse$drug)){
-  plots <- list()
-  for (target_feature in names(OOL_features)) {
+  plots <- c()
+  for (target_feature in names(OOL_features)){
     ### PLOT THE MEDIAN SIGMOID
     if (target_feature %in% AllPenDoseresponse$feature){
-      plots[[paste0(target_feature,".median")]] <- plot_median_sigmoid(target_feature, target_drug)
+      plots[[length(plots)+1]] <- plot_median_sigmoid(target_feature, target_drug)
     }else{
-      plots[[paste0(target_feature,".median")]] <- ggplot() + theme_void()
+      plots[[length(plots)+1]] <- ggplot() + theme_void()
     }
-    
     
     ### PLOT THE ASSOCIATED OOL FEATURE
     # Getting the coefficients and class of the model
     coefs <- df_models[df_models$feature == target_feature,]$model[[1]][[1]]
     
     # building the predictions
-    y <- data[, target_feature]
     intercept <- coefs[['(Intercept)']]
     if (length(coefs) == 3){ # quadratic model
       a <- coefs[['DOS2']]
@@ -483,7 +481,8 @@ for (target_drug in unique(AllPenDoseresponse$drug)){
       y_deriv <- slope*(DOS - TTL) + (intercept + slope * TTL)
     }
     
-    df <- data.frame(x = DOS, y = y, y_pred = y_pred, y_deriv = y_deriv)
+    df <- data.frame("x" = DOS, "y" = data[, target_feature], "y_pred" = y_pred, "y_deriv" = y_deriv) %>%
+            rename("y"=target_feature)
     pval <- curve.classification[curve.classification$cytof == target_feature,]$pval
       
     # Plot
@@ -506,20 +505,20 @@ for (target_drug in unique(AllPenDoseresponse$drug)){
               axis.line.y = element_line())
       
     # Adding plot to the list of plots
-    plots[[paste0(target_feature,".OOL")]] <- plot
+    plots[[length(plots)+1]] <- plot
     
     ### PLOT THE INDIVIDUAL SIGMOID
     if (target_feature %in% AllPenDoseresponse$feature){
-      plots[[paste0(target_feature,".individual")]] <- plot_individual_sigmoids(target_feature, target_drug)
+      plots[[length(plots)+1]] <- plot_individual_sigmoids(target_feature, target_drug)
     }else{
-      plots[[paste0(target_feature,".individual")]] <- ggplot() + theme_void()
+      plots[[length(plots)+1]] <- ggplot() + theme_void()
     }
   }
-  
+
   # Saving the plots
   pdf(paste(plot_path, "/", target_drug, "_on_", feature_choice,".pdf", sep = ""), width=6, height=8)
   for (i in 0:floor(length(plots)/12)){
-    grid.arrange(grobs = plots[(12*i+1):min(length(plots),(12*i+12))], nrow = 4, ncol = 3)
+    grid.arrange(grobs = plots[(12*i+1):min(c(length(plots),(12*i+12)))], nrow = 4, ncol = 3)
   }
   dev.off()
 }

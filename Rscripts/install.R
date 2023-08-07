@@ -1,4 +1,6 @@
-install.packages("pacman")
+if (!("pacman" %in% installed.packages())) {
+  install.packages("pacman")
+}
 
 pacman::p_load(dplyr, 
                ggplot2, 

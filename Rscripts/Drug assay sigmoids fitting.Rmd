@@ -49,11 +49,19 @@ load(paste0(drug_assay_path, "/Preprocessed Data/all pen dose response with scal
 load(paste0(drug_assay_path, "/Preprocessed Data/median pen dose response with scales.rda"))
 ```
 
-Here we are going to use the precedent idea to build sigmoid or constant models on all the data.
+Here we are fitting sigmoid or constant functions on all the data. 
+
+From previous attempt to build sigmoid with regular r packages, the sigmoids which manage to be built have an initial value, a final value and a "jump" between the two which is happening between two of the four points that are actually measured. To have more sigmoid functions that manage to be built by the r packages, we have decided to build sigmoid functions by hand by setting : 
+- the jump values to one of the intermediate values of the doses
+- initial value to be the median of the values before the jump
+- the final value to be the median of the values after the jump
+This way, we are trying to fit 3 different sigmoid functions on the same four points and keeping the one with lowest rmse.
+
+We also chose the scale log10_1_dose because it is the most relevant one based on the first sigmoids which were built thanks to the r packages.
 
 ```{r}
 # Sigmoid function we want to fit
-sigmoid_model <- function(x, b, c, d, e) {
+sigmoid_function <- function(x, b, c, d, e) {
   c + (d - c) / (1 + exp(-b * (x - e)))
 }
 
@@ -86,15 +94,15 @@ build.hand.sigmoid <- function(data, id="median", scale="log10_1_dose"){
     for (i in seq(data$dose[-length(data$dose)])){
       # Setting the parameters of the new sigmoids based on the data
       new.e <- (data$dose[i] + data$dose[i+1])/2
-      new.b.1 <- 4/(data$dose[i]-new.e)
-      new.b.2 <- 4/(data$dose[i+1]-new.e)
+      new.b.1 <- 4/(data$dose[i]-new.e) # Decreasing sigmoid
+      new.b.2 <- 4/(data$dose[i+1]-new.e) # Increasing sigmoid
       b_median <- median(dplyr::filter(data, dose <= new.e)$value) # Median of the data before new.e
       a_median <- median(dplyr::filter(data, dose >= new.e)$value) # Median of the data after new.e
       new.c <- min(b_median, a_median)
       new.d <- max(b_median, a_median)
       # New sigmoid scores
-      preds.1 <- sigmoid_model(data$dose, new.b.1, new.c, new.d, new.e)
-      preds.2 <- sigmoid_model(data$dose, new.b.2, new.c, new.d, new.e)
+      preds.1 <- sigmoid_function(data$dose, new.b.1, new.c, new.d, new.e)
+      preds.2 <- sigmoid_function(data$dose, new.b.2, new.c, new.d, new.e)
       residuals.1 <- preds.1 - data$value
       residuals.2 <- preds.2 - data$value
       new.rmse.1 <- sqrt(mean(residuals.1^2))
@@ -163,7 +171,7 @@ for (target_feature in unique(AllPenDoseresponse$feature)){
     hand.log10_1.individual.model <- rbind(hand.log10_1.individual.model, individual_models)
     hand.log10_1.median.model <- rbind(hand.log10_1.median.model, median_model)
     
-    # Incrementation for progress bar
+    # Incremental for progress bar
     i <- i + 1
   }
 }
@@ -175,7 +183,7 @@ save(hand.log10_1.median.model, file=paste0(out_path, "/log10_1 hand median mode
 
 ## Models analysis
 
-Loading log10_1.hand.median.model and log10_1.hand.individualmodel (Necessary only if you haven't run all the code above).
+Loading log10_1.hand.median.model and log10_1.hand.individual.model (Necessary only if you haven't run all the code above).
 
 ```{r}
 load(paste0(out_path, "/log10_1 hand median models.rda"))
@@ -221,19 +229,6 @@ save(individual.sigmoid.scores, file=paste0(out_path, "/individual sigmoids scor
 
 ## Visualization
 
-Function regrouping all the different class of models we applied to our data
-
-```{r}
-# Define functions for the different class of models
-model_function <- function(x, model_class, constant, Intercept, slope, b, c, d, e) {
-  if (model_class=="sigmoid" || model_class=="constant.sigmoid") {
-    return(c + (d - c) / (1 + exp(-b * (x - e))))
-  } else {
-    return(NULL)
-  }
-}
-```
-
 Function creating one plot for individual models
 
 ```{r}
@@ -259,8 +254,7 @@ plot_individual_models <- function(target_feature, target_drug, model_list=hand.
     model=target_models[target_models$ID==id,]
     constant <-data[data$ID==id,]$value[1]
     for (x in X){
-        values <- c(values, 
-                    model_function(x, model$class, constant, model$Intercept, model$slope, model$b, model$c, model$d, model$e))
+        values <- c(values, sigmoid_function(x, model$b, model$c, model$d, model$e))
     }
   }
   df_fun <- cbind(df_fun, values)
@@ -301,8 +295,7 @@ plot_median_model <- function(target_feature, target_drug, model_list=hand.log10
   values <- c()
   constant <-median(data[data$ID==1,]$value)
   for (x in X){
-    values <- c(values,
-                model_function(x, target_model$class, constant, target_model$Intercept, target_model$slope, target_model$b, target_model$c, target_model$d, target_model$e))
+    values <- c(values, sigmoid_function(x, target_model$b, target_model$c, target_model$d, target_model$e))
   }
   df_fun <- cbind(df_fun, values)
   
@@ -324,7 +317,7 @@ plot_individual_models("CD56hiCD16negNK_STAT1_IFNa","Chlorthalidone")
 plot_median_model("Bcells_CREB_IFNa","Clotrimazole")
 ```
 
-Plotting the models for all the data
+Plotting the models for all the data (you can access the plots in the folder /Plots/Drug Assay data visualization)
 
 ```{r}
 ###### WARNING THIS CELL TAKES MORE THAN AN HOUR TO RUN ! ###### 
@@ -355,13 +348,3 @@ dev.off()
 ```
 
 **Conclusion :** The sigmoids that are built seem to represent the trend of the drug effect very well, we'll carry on our analysis based on these sigmoids to assess the effect of a drug at a given concentration on a given feature.
-
-
-
-
-
-
-
-
-
-

@@ -1758,198 +1758,84 @@ display: none;
 plots.</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuc2V0d2QocGFzdGUwKG15X3BhdGgsXFwvUnNjcmlwdHNcXCkpXG5mdW5jdF9wYXRoPXBhc3RlMChteV9wYXRoLFxcL09uc2V0IG9mIExhYm9yIGRhdGEvT25zZXQgb2YgTGFib3IgSW5pdGlhbCBEYXRhL09uc2V0IG9mIExhYm9yIFN0dWR5IFJlYW5hbHlzaXMgUFRCIGRydWcgYXNzYXkgbWF0Y2hpbmcgZ2F0ZXMuY3N2XFwpXG5wYXRoX3RvX3BlbmFsaXphdGlvbl9maWxlPXBhc3RlMChteV9wYXRoLFxcL09uc2V0IG9mIExhYm9yIGRhdGEvT25zZXQgb2YgTGFib3IgSW5pdGlhbCBEYXRhL3BlbmFsaXphdGlvbiBtYXRyaXggZHJ1ZyBhc3NheS54bHN4XFwpXG5vdXRfcGF0aD1wYXN0ZTAobXlfcGF0aCxcXC9PbnNldCBvZiBMYWJvciBkYXRhL1ByZXByb2Nlc3NlZCBEYXRhXFwpXG5gYGBcbmBgYCJ9 -->
-<pre class="r"><code>```r
-setwd(paste0(my_path,\/Rscripts\))
-funct_path=paste0(my_path,\/Onset of Labor data/Onset of Labor Initial Data/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv\)
-path_to_penalization_file=paste0(my_path,\/Onset of Labor data/Onset of Labor Initial Data/penalization matrix drug assay.xlsx\)
-out_path=paste0(my_path,\/Onset of Labor data/Preprocessed Data\)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Creating a directory for the outcomes
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuaWYoIWZpbGUuZXhpc3RzKG91dF9wYXRoKSl7ZGlyLmNyZWF0ZShvdXRfcGF0aCwgcmVjdXJzaXZlID0gVFJVRSl9XG5gYGBcbmBgYCJ9 --&gt;
-
-```r
-```r
-if(!file.exists(out_path)){dir.create(out_path, recursive = TRUE)}</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-## Libraries
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxubGlicmFyeSh0aWR5c2VsZWN0KVxubGlicmFyeShyZXNoYXBlMilcbmxpYnJhcnkoZHBseXIpXG5gYGBcbmBgYCJ9 --&gt;
-
-```r
-```r
-library(tidyselect)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuY3VycmVudF9kaXIgPC0gZ2V0d2QoKVxubXlfcGF0aCA8LSBzdWIoXCIvW14vXSskXCIsIFwiXCIsIGN1cnJlbnRfZGlyKVxuc2V0d2QocGFzdGUwKG15X3BhdGgsXCIvUnNjcmlwdHNcIikpXG5mdW5jdF9wYXRoPXBhc3RlMChteV9wYXRoLFwiL09uc2V0IG9mIExhYm9yIGRhdGEvT25zZXQgb2YgTGFib3IgSW5pdGlhbCBEYXRhL09uc2V0IG9mIExhYm9yIFN0dWR5IFJlYW5hbHlzaXMgUFRCIGRydWcgYXNzYXkgbWF0Y2hpbmcgZ2F0ZXMuY3N2XCIpXG5wYXRoX3RvX3BlbmFsaXphdGlvbl9maWxlPXBhc3RlMChteV9wYXRoLFwiL09uc2V0IG9mIExhYm9yIGRhdGEvT25zZXQgb2YgTGFib3IgSW5pdGlhbCBEYXRhL3BlbmFsaXphdGlvbiBtYXRyaXggZHJ1ZyBhc3NheS54bHN4XCIpXG5vdXRfcGF0aD1wYXN0ZTAobXlfcGF0aCxcIi9PbnNldCBvZiBMYWJvciBkYXRhL1ByZXByb2Nlc3NlZCBEYXRhXCIpXG5gYGAifQ== -->
+<pre class="r"><code>current_dir &lt;- getwd()
+my_path &lt;- sub(&quot;/[^/]+$&quot;, &quot;&quot;, current_dir)
+setwd(paste0(my_path,&quot;/Rscripts&quot;))
+funct_path=paste0(my_path,&quot;/Onset of Labor data/Onset of Labor Initial Data/Onset of Labor Study Reanalysis PTB drug assay matching gates.csv&quot;)
+path_to_penalization_file=paste0(my_path,&quot;/Onset of Labor data/Onset of Labor Initial Data/penalization matrix drug assay.xlsx&quot;)
+out_path=paste0(my_path,&quot;/Onset of Labor data/Preprocessed Data&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Creating a directory for the outcomes</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuaWYoIWZpbGUuZXhpc3RzKG91dF9wYXRoKSl7ZGlyLmNyZWF0ZShvdXRfcGF0aCwgcmVjdXJzaXZlID0gVFJVRSl9XG5gYGAifQ== -->
+<pre class="r"><code>if(!file.exists(out_path)){dir.create(out_path, recursive = TRUE)}</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="libraries" class="section level2">
+<h2>Libraries</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh0aWR5c2VsZWN0KVxubGlicmFyeShyZXNoYXBlMilcbmxpYnJhcnkoZHBseXIpXG5saWJyYXJ5KHZpcmlkaXMpXG5saWJyYXJ5KHJlYWR4bClcbmxpYnJhcnkodGlkeXIpXG5saWJyYXJ5KHN0cmluZ3IpXG5gYGAifQ== -->
+<pre class="r"><code>library(tidyselect)
 library(reshape2)
-library(dplyr)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoiXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYZHBseXLigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnN0YXRz4oCZOlxuXG4gICAgZmlsdGVyLCBsYWdcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOmJhc2XigJk6XG5cbiAgICBpbnRlcnNlY3QsIHNldGRpZmYsIHNldGVxdWFsLCB1bmlvblxuIn0= --&gt;
-</code></pre>
-<p>Attaching package: ‘dplyr’</p>
-<p>The following objects are masked from ‘package:stats’:</p>
-<pre><code>filter, lag</code></pre>
-<p>The following objects are masked from ‘package:base’:</p>
-<pre><code>intersect, setdiff, setequal, union</code></pre>
-<pre><code>
-
-
-&lt;!-- rnb-output-end --&gt;
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxubGlicmFyeSh2aXJpZGlzKVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
-library(viridis)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoiTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiB2aXJpZGlzTGl0ZVxuIn0= --&gt;
-</code></pre>
-<p>Loading required package: viridisLite</p>
-<pre><code>
-
-
-&lt;!-- rnb-output-end --&gt;
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxubGlicmFyeShyZWFkeGwpXG5saWJyYXJ5KHRpZHlyKVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
+library(dplyr)
+library(viridis)
 library(readxl)
-library(tidyr)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoiXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYdGlkeXLigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3QgaXMgbWFza2VkIGZyb20g4oCYcGFja2FnZTpyZXNoYXBlMuKAmTpcblxuICAgIHNtaXRoc1xuXG5UaGUgZm9sbG93aW5nIG9iamVjdHMgYXJlIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6TWF0cml44oCZOlxuXG4gICAgZXhwYW5kLCBwYWNrLCB1bnBhY2tcbiJ9 --&gt;
-</code></pre>
-<p>Attaching package: ‘tidyr’</p>
-<p>The following object is masked from ‘package:reshape2’:</p>
-<pre><code>smiths</code></pre>
-<p>The following objects are masked from ‘package:Matrix’:</p>
-<pre><code>expand, pack, unpack</code></pre>
-<pre><code>
-
-
-&lt;!-- rnb-output-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-## Restructuring the Data
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuTXlEYXRhID0gcmVhZC5jc3YoZnVuY3RfcGF0aClcbmhlYWQoTXlEYXRhKVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
-MyData = read.csv(funct_path)
+library(tidyr)
+library(stringr)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="restructuring-the-data" class="section level2">
+<h2>Restructuring the Data</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuTXlEYXRhID0gcmVhZC5jc3YoZnVuY3RfcGF0aClcbmhlYWQoTXlEYXRhKVxuYGBgIn0= -->
+<pre class="r"><code>MyData = read.csv(funct_path)
 head(MyData)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjoiZGF0YS5mcmFtZSIsIm5yb3ciOjYsIm5jb2wiOjgsInN1bW1hcnkiOnsiRGVzY3JpcHRpb24iOiJkZiBbNiDDlyA4XSJ9fSwicmRmIjoiSDRzSUFBQUFBQUFBQTcxVFRVL0NNQmd1ak1HWWdpWmU5SVFuYnl3dVl3SW52aUZjMEFBbTNraUZDUXVqVzhZVzFKTVhQZm9iUFBzSC9DVmVqZjRIandac29RWHRUVWhjMHZWNW4vWjkrenpOMjJiNVFwTXZaQUNBQUVJQy9vc1lBdkc4WFUxbUFBZ0ZjUkFBSVJBbDh6VmUzc05Bd21NWGp6QmQySzY1RVBtVzNiM3hqUEcvY0wvUGw5VlV0alhxbEpxVkltVzJWUDI0MGV1MDJvVzJUcW1vcXFzVnYrTm9tZFVlRFJOa2o3cWlVcmdRb1RSS1NhcXUxM0NsRSs3TVlESzlCdnBkSTZSbGxQUkdtTk8wOVBZWHhOWEladGRBbks5NnRRRTN3Z0RFU2IzYysxRWw4Zll3eVIvZWYrYUZzeUtnWDI3Ni9BcWsra3UrZXB0NEVvWUgrZjNTNCt4cjhNRTFySWpnYU5rc0Vtc1d4M1o4QzNxbWpTZ1RjUTNZTjVCSFE2RjgybUt3VWlzd2x5dFVMN1A2TGM4Y3NRWU5qNHllQ1JFbkllcmFFNFhKaUpIc3U0V0ZNSysxYThFeDA4cEl1UWM5cUZ5NU9COUhVeTRsWWp2RUJVNEtrbGNwY3NrQmx5TjJmRVNVOUpMZGdZK0c1SGtEZWI2OEdERTZoMzlnYVhGa2NFWkxpY3lzZ2ZvbU1waDJDMTRhRmczaTJQSGNzT0s0NXZKU1pjeU9GYy8ySU5zbmQyMkxNWE52WVBvTm9NcVFrb3dFQUFBPSJ9 --&gt;
-
-&lt;div data-pagedtable=&quot;false&quot;&gt;
-  &lt;script data-pagedtable-source type=&quot;application/json&quot;&gt;
-{&quot;columns&quot;:[{&quot;label&quot;:[&quot;&quot;],&quot;name&quot;:[&quot;_rn_&quot;],&quot;type&quot;:[&quot;&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;population&quot;],&quot;name&quot;:[1],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;reagent&quot;],&quot;name&quot;:[2],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;DOS&quot;],&quot;name&quot;:[3],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;EGA&quot;],&quot;name&quot;:[4],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;GA&quot;],&quot;name&quot;:[5],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;ID&quot;],&quot;name&quot;:[6],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;Stims&quot;],&quot;name&quot;:[7],&quot;type&quot;:[&quot;chr&quot;],&quot;align&quot;:[&quot;left&quot;]},{&quot;label&quot;:[&quot;median&quot;],&quot;name&quot;:[8],&quot;type&quot;:[&quot;dbl&quot;],&quot;align&quot;:[&quot;right&quot;]}],&quot;data&quot;:[{&quot;1&quot;:&quot;Granulocytes&quot;,&quot;2&quot;:&quot;149Sm_CREB&quot;,&quot;3&quot;:&quot;-7&quot;,&quot;4&quot;:&quot;38.7&quot;,&quot;5&quot;:&quot;38&quot;,&quot;6&quot;:&quot;99&quot;,&quot;7&quot;:&quot;IFNa&quot;,&quot;8&quot;:&quot;0.5046716&quot;,&quot;_rn_&quot;:&quot;1&quot;},{&quot;1&quot;:&quot;Granulocytes&quot;,&quot;2&quot;:&quot;150Nd_STAT5&quot;,&quot;3&quot;:&quot;-7&quot;,&quot;4&quot;:&quot;38.7&quot;,&quot;5&quot;:&quot;38&quot;,&quot;6&quot;:&quot;99&quot;,&quot;7&quot;:&quot;IFNa&quot;,&quot;8&quot;:&quot;8.2616291&quot;,&quot;_rn_&quot;:&quot;2&quot;},{&quot;1&quot;:&quot;Granulocytes&quot;,&quot;2&quot;:&quot;151Eu_p38&quot;,&quot;3&quot;:&quot;-7&quot;,&quot;4&quot;:&quot;38.7&quot;,&quot;5&quot;:&quot;38&quot;,&quot;6&quot;:&quot;99&quot;,&quot;7&quot;:&quot;IFNa&quot;,&quot;8&quot;:&quot;0.0000000&quot;,&quot;_rn_&quot;:&quot;3&quot;},{&quot;1&quot;:&quot;Granulocytes&quot;,&quot;2&quot;:&quot;153Eu_STAT1&quot;,&quot;3&quot;:&quot;-7&quot;,&quot;4&quot;:&quot;38.7&quot;,&quot;5&quot;:&quot;38&quot;,&quot;6&quot;:&quot;99&quot;,&quot;7&quot;:&quot;IFNa&quot;,&quot;8&quot;:&quot;1.9167070&quot;,&quot;_rn_&quot;:&quot;4&quot;},{&quot;1&quot;:&quot;Granulocytes&quot;,&quot;2&quot;:&quot;154Sm_STAT3&quot;,&quot;3&quot;:&quot;-7&quot;,&quot;4&quot;:&quot;38.7&quot;,&quot;5&quot;:&quot;38&quot;,&quot;6&quot;:&quot;99&quot;,&quot;7&quot;:&quot;IFNa&quot;,&quot;8&quot;:&quot;44.9540901&quot;,&quot;_rn_&quot;:&quot;5&quot;},{&quot;1&quot;:&quot;Granulocytes&quot;,&quot;2&quot;:&quot;155Gd_S6&quot;,&quot;3&quot;:&quot;-7&quot;,&quot;4&quot;:&quot;38.7&quot;,&quot;5&quot;:&quot;38&quot;,&quot;6&quot;:&quot;99&quot;,&quot;7&quot;:&quot;IFNa&quot;,&quot;8&quot;:&quot;6.0659752&quot;,&quot;_rn_&quot;:&quot;6&quot;}],&quot;options&quot;:{&quot;columns&quot;:{&quot;min&quot;:{},&quot;max&quot;:[10],&quot;total&quot;:[8]},&quot;rows&quot;:{&quot;min&quot;:[10],&quot;max&quot;:[10],&quot;total&quot;:[6]},&quot;pages&quot;:{}}}
-  &lt;/script&gt;
-&lt;/div&gt;
-
-&lt;!-- rnb-frame-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-We create an ID, remove the isotope names from the reagent and remove control samples that are not relevant in the analysis.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuTXlEYXRhID0gTXlEYXRhICU+JVxuICAgICAgICAgIHJlbmFtZShcXHN0aW11bGF0aW9uXFwgPSBcXFN0aW1zXFwpICU+JVxuICAgICAgICAgIGRwbHlyOjptdXRhdGUocmVhZ2VudCA9IHN1YihcXF5bXl9dKl9cXCwgXFxcXCwgcmVhZ2VudCksXG4gICAgICAgICAgICAgICAgICAgICAgICBJRCA9IHBhc3RlMChcXFBcXCxJRCwgXFxfXFwsIEdBKSkgJT4lICMgQ3JlYXRpbmcgYSBuZXcgaW5kZXggSURcbiAgICAgICAgICBkcGx5cjo6ZmlsdGVyKElEICE9IFxcUGludGVybmFsY29udHJvbF9uYVxcKSAlPiVcbiAgICAgICAgICBkcGx5cjo6c2VsZWN0KC1jKEVHQSwgR0EpKVxuTXlEYXRhJElEID0gYXMuY2hhcmFjdGVyKE15RGF0YSRJRClcbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-MyData = MyData %&gt;%
-          rename(\stimulation\ = \Stims\) %&gt;%
-          dplyr::mutate(reagent = sub(\^[^_]*_\, \\, reagent),
-                        ID = paste0(\P\,ID, \_\, GA)) %&gt;% # Creating a new index ID
-          dplyr::filter(ID != \Pinternalcontrol_na\) %&gt;%
+<!-- rnb-source-end -->
+<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbImRhdGEuZnJhbWUiXSwibnJvdyI6NiwibmNvbCI6OCwic3VtbWFyeSI6eyJEZXNjcmlwdGlvbiI6WyJkZiBbNiDDlyA4XSJdfX0sInJkZiI6Ikg0c0lBQUFBQUFBQUE3MVR1MDdETUJRMWVaUTBVRUJpZ2FsTWJJMkkwa0E3RVdqVHFnc2dVcVJ1bFdrQ1JDUk9sQ2JpTWJIQXlEY3c4d044Q1N1Q2YyQkVCYnUxVytvTmtJaDA0M09QZmEvUGlXNE82eDFEN2FnQUFCRklJbjdMR0FMNXFOMG9WUUNRQkp6TUFBbmt5WHFKdDVjeFVIQXM0Y2pSamZsbUFsRVdSTDJyMU92L0N6ZDl2NnFYcTA3WXJSM2F1NVNaMDgyTlBiZnJ0SGZhSnFYeXVxbmJXVGMyS3BNekJpYklHWDFDbFhFalFobVVVblRUYk9KT205eWRRbW5yRjJpNmgyUlV0SzAvWVU3VDJOdFBFTmVqV3YwRjRueTFHbnZ3VHhpQUJkSnYrM1hkTHI3Y1hWaHJ0KytXZUxBTDZMTTllSHdHU3V2SmFsd1hIOFR6Vld1bGR2LzVjZmJHRGF5TVlEZ2VGb1VOU3h6RldRQlRQMEtVbVUwOGVPcWhsS1ppZmQ5aDBHN3VNSmNUMUtxei9rN3FoMnhBYzZIbitoQnhFdkpKZEtFeEdRVlNmVE95a09PMTlnTFlaMW9acWJvd2hkcEpndXR4TnVCS1pxT1l1TUJGQXZrclphNTRKdUdJeFF3UkpXNnBkNWFoOHhLWmFIVzRQWW9DWFhQZnNESzZVdmlrcldSbTFrT25QdktZOWdBZWV3Rk5GckRqb1dFdFR2enhSMVV4MjlmU0tJWHNuTnFMQXNZTXZZSEJGNzhkTnE2TUJBQUEifQ== -->
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["population"],"name":[1],"type":["chr"],"align":["left"]},{"label":["reagent"],"name":[2],"type":["chr"],"align":["left"]},{"label":["DOS"],"name":[3],"type":["chr"],"align":["left"]},{"label":["EGA"],"name":[4],"type":["chr"],"align":["left"]},{"label":["GA"],"name":[5],"type":["chr"],"align":["left"]},{"label":["ID"],"name":[6],"type":["chr"],"align":["left"]},{"label":["Stims"],"name":[7],"type":["chr"],"align":["left"]},{"label":["median"],"name":[8],"type":["dbl"],"align":["right"]}],"data":[{"1":"Granulocytes","2":"149Sm_CREB","3":"-7","4":"38.7","5":"38","6":"99","7":"IFNa","8":"0.5046716","_rn_":"1"},{"1":"Granulocytes","2":"150Nd_STAT5","3":"-7","4":"38.7","5":"38","6":"99","7":"IFNa","8":"8.2616291","_rn_":"2"},{"1":"Granulocytes","2":"151Eu_p38","3":"-7","4":"38.7","5":"38","6":"99","7":"IFNa","8":"0.0000000","_rn_":"3"},{"1":"Granulocytes","2":"153Eu_STAT1","3":"-7","4":"38.7","5":"38","6":"99","7":"IFNa","8":"1.9167070","_rn_":"4"},{"1":"Granulocytes","2":"154Sm_STAT3","3":"-7","4":"38.7","5":"38","6":"99","7":"IFNa","8":"44.9540901","_rn_":"5"},{"1":"Granulocytes","2":"155Gd_S6","3":"-7","4":"38.7","5":"38","6":"99","7":"IFNa","8":"6.0659752","_rn_":"6"}],"options":{"columns":{"min":{},"max":[10],"total":[8]},"rows":{"min":[10],"max":[10],"total":[6]},"pages":{}}}
+  </script>
+</div>
+<!-- rnb-frame-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>We create an ID, remove the isotope names from the reagent and remove
+control samples that are not relevant in the analysis.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuTXlEYXRhID0gTXlEYXRhICU+JVxuICAgICAgICAgIHJlbmFtZShcInN0aW11bGF0aW9uXCIgPSBcIlN0aW1zXCIpICU+JVxuICAgICAgICAgIGRwbHlyOjptdXRhdGUocmVhZ2VudCA9IHN1YihcIl5bXl9dKl9cIiwgXCJcIiwgcmVhZ2VudCksXG4gICAgICAgICAgICAgICAgICAgICAgICBJRCA9IHBhc3RlMChcIlBcIixJRCwgXCJfXCIsIEdBKSkgJT4lICMgQ3JlYXRpbmcgYSBuZXcgaW5kZXggSURcbiAgICAgICAgICBkcGx5cjo6ZmlsdGVyKElEICE9IFwiUGludGVybmFsY29udHJvbF9uYVwiKSAlPiVcbiAgICAgICAgICBkcGx5cjo6c2VsZWN0KC1jKEVHQSwgR0EpKVxuTXlEYXRhJElEID0gYXMuY2hhcmFjdGVyKE15RGF0YSRJRClcbmBgYCJ9 -->
+<pre class="r"><code>MyData = MyData %&gt;%
+          rename(&quot;stimulation&quot; = &quot;Stims&quot;) %&gt;%
+          dplyr::mutate(reagent = sub(&quot;^[^_]*_&quot;, &quot;&quot;, reagent),
+                        ID = paste0(&quot;P&quot;,ID, &quot;_&quot;, GA)) %&gt;% # Creating a new index ID
+          dplyr::filter(ID != &quot;Pinternalcontrol_na&quot;) %&gt;%
           dplyr::select(-c(EGA, GA))
 MyData$ID = as.character(MyData$ID)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-## Feature engineering
-
-Here, we use the asinh transform on the cytometry data and build a feature that is the difference between stimulated and un-stimulated samples
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuZmluYWxfZGF0YSA9IGMoKVxuZmlsID0gYyhcXHBvcHVsYXRpb25cXCxcXHJlYWdlbnRcXCxcXElEXFwpXG5mb3IodGltZXBvaW50IGluIHVuaXF1ZShNeURhdGEkSUQpKXtcbiAgIyBzdWJzZXQgb2YgdGhlIGRhdGEgZm9yIGEgZ2l2ZW4gSURcbiAgTXlEYXRhX3RpbWVwb2ludCA9IE15RGF0YSAlPiUgZHBseXI6OmZpbHRlcihJRCA9PSB0aW1lcG9pbnQpXG4gICMgc3RpbXVsYXRpb25zIGFzc29jaWF0ZWQgdG8gdGhpcyBJRFxuICBzdGltcyA9IHVuaXF1ZShNeURhdGFfdGltZXBvaW50JHN0aW11bGF0aW9uKVxuICAjIGFzaW5oIHRyYW5zZm9ybSBhbmQgcmVtb3Zpbmcgb3V0Y29tZXMgKERPUylcbiAgTXlEYXRhX3RpbWVwb2ludCA9IE15RGF0YV90aW1lcG9pbnQgJT4lXG4gICAgICAgICAgICAgICAgICAgICAgICBkcGx5cjo6bXV0YXRlKGZlYXR1cmUgPSBhc2luaChtZWRpYW4vNSkpICU+JVxuICAgICAgICAgICAgICAgICAgICAgICAgZHBseXI6OnNlbGVjdCgtYyhcXERPU1xcLCBcXG1lZGlhblxcKSkgJT4lXG4gICAgICAgICAgICAgICAgICAgICAgICBwaXZvdF93aWRlcihuYW1lc19mcm9tID0gc3RpbXVsYXRpb24sIHZhbHVlc19mcm9tID0gZmVhdHVyZSlcbiAgIyBEaWZmZXJlbmNlIGJldHdlZW4gc3RpbSBhbmQgdW4tc3RpbVxuICBmb3IgKHN0aW0gaW4gc3RpbXMpe1xuICAgIGlmIChzdGltIT1cXHVuc3RpbVxcKXtcbiAgICAgIE15RGF0YV90aW1lcG9pbnRbc3RpbV0gPSBNeURhdGFfdGltZXBvaW50W3N0aW1dIC0gTXlEYXRhX3RpbWVwb2ludFtcXHVuc3RpbVxcXVxuICAgIH1cbiAgfVxuICBNeURhdGFfZmluID0gTXlEYXRhX3RpbWVwb2ludCAlPiVcbiAgICAgICAgICAgICAgICAgIHBpdm90X2xvbmdlcigtYWxsX29mKGZpbCksIG5hbWVzX3RvPVxcc3RpbXVsYXRpb25cXCx2YWx1ZXNfdG89XFxmZWF0dXJlXFwpXG4gICMgQWRkaW5nIHRoZSBuZXcgcHJlcHJvY2Vzc2VkIGRhdGEgdG8gZmluYWxfZGF0YVxuICBmaW5hbF9kYXRhID0gcmJpbmQoZmluYWxfZGF0YSwgTXlEYXRhX2Zpbilcbn1cbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-final_data = c()
-fil = c(\population\,\reagent\,\ID\)
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="feature-engineering" class="section level2">
+<h2>Feature engineering</h2>
+<p>Here, we use the asinh transform on the cytometry data and build a
+feature that is the difference between stimulated and un-stimulated
+samples</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZmluYWxfZGF0YSA9IGMoKVxuZmlsID0gYyhcInBvcHVsYXRpb25cIixcInJlYWdlbnRcIixcIklEXCIpXG5mb3IodGltZXBvaW50IGluIHVuaXF1ZShNeURhdGEkSUQpKXtcbiAgIyBzdWJzZXQgb2YgdGhlIGRhdGEgZm9yIGEgZ2l2ZW4gSURcbiAgTXlEYXRhX3RpbWVwb2ludCA9IE15RGF0YSAlPiUgZHBseXI6OmZpbHRlcihJRCA9PSB0aW1lcG9pbnQpXG4gICMgc3RpbXVsYXRpb25zIGFzc29jaWF0ZWQgdG8gdGhpcyBJRFxuICBzdGltcyA9IHVuaXF1ZShNeURhdGFfdGltZXBvaW50JHN0aW11bGF0aW9uKVxuICAjIGFzaW5oIHRyYW5zZm9ybSBhbmQgcmVtb3Zpbmcgb3V0Y29tZXMgKERPUylcbiAgTXlEYXRhX3RpbWVwb2ludCA9IE15RGF0YV90aW1lcG9pbnQgJT4lXG4gICAgICAgICAgICAgICAgICAgICAgICBkcGx5cjo6bXV0YXRlKGZlYXR1cmUgPSBhc2luaChtZWRpYW4vNSkpICU+JVxuICAgICAgICAgICAgICAgICAgICAgICAgZHBseXI6OnNlbGVjdCgtYyhcIkRPU1wiLCBcIm1lZGlhblwiKSkgJT4lXG4gICAgICAgICAgICAgICAgICAgICAgICBwaXZvdF93aWRlcihuYW1lc19mcm9tID0gc3RpbXVsYXRpb24sIHZhbHVlc19mcm9tID0gZmVhdHVyZSlcbiAgIyBEaWZmZXJlbmNlIGJldHdlZW4gc3RpbSBhbmQgdW4tc3RpbVxuICBmb3IgKHN0aW0gaW4gc3RpbXMpe1xuICAgIGlmIChzdGltIT1cInVuc3RpbVwiKXtcbiAgICAgIE15RGF0YV90aW1lcG9pbnRbc3RpbV0gPSBNeURhdGFfdGltZXBvaW50W3N0aW1dIC0gTXlEYXRhX3RpbWVwb2ludFtcInVuc3RpbVwiXVxuICAgIH1cbiAgfVxuICBNeURhdGFfZmluID0gTXlEYXRhX3RpbWVwb2ludCAlPiVcbiAgICAgICAgICAgICAgICAgIHBpdm90X2xvbmdlcigtYWxsX29mKGZpbCksIG5hbWVzX3RvPVwic3RpbXVsYXRpb25cIix2YWx1ZXNfdG89XCJmZWF0dXJlXCIpXG4gICMgQWRkaW5nIHRoZSBuZXcgcHJlcHJvY2Vzc2VkIGRhdGEgdG8gZmluYWxfZGF0YVxuICBmaW5hbF9kYXRhID0gcmJpbmQoZmluYWxfZGF0YSwgTXlEYXRhX2Zpbilcbn1cbmBgYCJ9 -->
+<pre class="r"><code>final_data = c()
+fil = c(&quot;population&quot;,&quot;reagent&quot;,&quot;ID&quot;)
 for(timepoint in unique(MyData$ID)){
   # subset of the data for a given ID
   MyData_timepoint = MyData %&gt;% dplyr::filter(ID == timepoint)
@@ -1958,331 +1844,174 @@ for(timepoint in unique(MyData$ID)){
   # asinh transform and removing outcomes (DOS)
   MyData_timepoint = MyData_timepoint %&gt;%
                         dplyr::mutate(feature = asinh(median/5)) %&gt;%
-                        dplyr::select(-c(\DOS\, \median\)) %&gt;%
+                        dplyr::select(-c(&quot;DOS&quot;, &quot;median&quot;)) %&gt;%
                         pivot_wider(names_from = stimulation, values_from = feature)
   # Difference between stim and un-stim
   for (stim in stims){
-    if (stim!=\unstim\){
-      MyData_timepoint[stim] = MyData_timepoint[stim] - MyData_timepoint[\unstim\]
+    if (stim!=&quot;unstim&quot;){
+      MyData_timepoint[stim] = MyData_timepoint[stim] - MyData_timepoint[&quot;unstim&quot;]
     }
   }
   MyData_fin = MyData_timepoint %&gt;%
-                  pivot_longer(-all_of(fil), names_to=\stimulation\,values_to=\feature\)
+                  pivot_longer(-all_of(fil), names_to=&quot;stimulation&quot;,values_to=&quot;feature&quot;)
   # Adding the new preprocessed data to final_data
   final_data = rbind(final_data, MyData_fin)
 }</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Saving final_data
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxud3JpdGUuY3N2KGZpbmFsX2RhdGEsIHBhc3RlMChvdXRfcGF0aCwgXFwvcHJlcHJvY2Vzc2VkX09PTC5jc3ZcXCksIHJvdy5uYW1lcz1GQUxTRSlcbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-write.csv(final_data, paste0(out_path, \/preprocessed_OOL.csv\), row.names=FALSE)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-## Creating data files for ML models
-
-### Unpenalized data
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuIyBSZW1vdmluZyByZW1haW5pbmcgdW5yZWxldmFudCBkYXRhIGZvciBNTCBtb2RlbHNcbnggPSBmaW5hbF9kYXRhWyFncmVwbChcXHBwXFwsIGZpbmFsX2RhdGEkSUQpLF0gJT4lICNyZW1vdmluZyBwcCBJRCB3aGljaCBjb3JyZXNwb25kIHRvIHBvc3QgcGFydHVtIGRhdGFcbiAgICAgIGRjYXN0KElEIH4gcG9wdWxhdGlvbiArIHJlYWdlbnQgKyBzdGltdWxhdGlvbiwgdmFsdWUudmFyID0gXFxmZWF0dXJlXFwpXG5cbiMgSW1wb3J0aW5nIHRoZSByb3cgZGF0YSBhZ2FpbiB0byBnZXQgdGhlIG91dGNvbWVzIChET1MpIGFuZCB0aGUgRUdBXG5UVEwgPSByZWFkLmNzdihmdW5jdF9wYXRoKSAlPiVcbiAgICAgICAgcmVuYW1lKFxcc3RpbXVsYXRpb25cXCA9IFxcU3RpbXNcXCkgJT4lXG4gICAgICAgIGRwbHlyOjptdXRhdGUoSUQgPSBwYXN0ZTAoXFxQXFwsSUQsIFxcX1xcLCBHQSkpICU+JSAjIENyZWF0aW5nIGEgbmV3IGluZGV4IElEXG4gICAgICAgIGRwbHlyOjpmaWx0ZXIoSUQgIT0gXFxQaW50ZXJuYWxjb250cm9sX25hXFwpICU+JVxuICAgICAgICBkcGx5cjo6c2VsZWN0KGMoRUdBLCBET1MsIElEKSkgJT4lXG4gICAgICAgIGRwbHlyOjpmaWx0ZXIoIWdyZXBsKFxccHBcXCwgSUQpKSAlPiVcbiAgICAgICAgZ3JvdXBfYnkoSUQpICU+JVxuICAgICAgICBkcGx5cjo6ZmlsdGVyKHJvd19udW1iZXIoKT09MSkgJT4lXG4gICAgICAgIGRwbHlyOjptdXRhdGUoRE9TID0gYXMubnVtZXJpYyhET1MpKSAlPiVcbiAgICAgICAgZHBseXI6Om11dGF0ZShFR0EgPSBhcy5udW1lcmljKEVHQSkpXG5gYGBcbmBgYCJ9 --&gt;
-
-```r
-```r
-# Removing remaining unrelevant data for ML models
-x = final_data[!grepl(\pp\, final_data$ID),] %&gt;% #removing pp ID which correspond to post partum data
-      dcast(ID ~ population + reagent + stimulation, value.var = \feature\)
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Saving final_data</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxud3JpdGUuY3N2KGZpbmFsX2RhdGEsIHBhc3RlMChvdXRfcGF0aCwgXCIvcHJlcHJvY2Vzc2VkX09PTC5jc3ZcIiksIHJvdy5uYW1lcz1GQUxTRSlcbmBgYCJ9 -->
+<pre class="r"><code>write.csv(final_data, paste0(out_path, &quot;/preprocessed_OOL.csv&quot;), row.names=FALSE)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="creating-data-files-for-ml-models" class="section level2">
+<h2>Creating data files for ML models</h2>
+<div id="unpenalized-data" class="section level3">
+<h3>Unpenalized data</h3>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBSZW1vdmluZyByZW1haW5pbmcgdW5yZWxldmFudCBkYXRhIGZvciBNTCBtb2RlbHNcbnggPSBmaW5hbF9kYXRhWyFncmVwbChcInBwXCIsIGZpbmFsX2RhdGEkSUQpLF0gJT4lICNyZW1vdmluZyBwcCBJRCB3aGljaCBjb3JyZXNwb25kIHRvIHBvc3QgcGFydHVtIGRhdGFcbiAgICAgIGRjYXN0KElEIH4gcG9wdWxhdGlvbiArIHJlYWdlbnQgKyBzdGltdWxhdGlvbiwgdmFsdWUudmFyID0gXCJmZWF0dXJlXCIpXG5cbiMgSW1wb3J0aW5nIHRoZSByb3cgZGF0YSBhZ2FpbiB0byBnZXQgdGhlIG91dGNvbWVzIChET1MpIGFuZCB0aGUgRUdBXG5UVEwgPSByZWFkLmNzdihmdW5jdF9wYXRoKSAlPiVcbiAgICAgICAgcmVuYW1lKFwic3RpbXVsYXRpb25cIiA9IFwiU3RpbXNcIikgJT4lXG4gICAgICAgIGRwbHlyOjptdXRhdGUoSUQgPSBwYXN0ZTAoXCJQXCIsSUQsIFwiX1wiLCBHQSkpICU+JSAjIENyZWF0aW5nIGEgbmV3IGluZGV4IElEXG4gICAgICAgIGRwbHlyOjpmaWx0ZXIoSUQgIT0gXCJQaW50ZXJuYWxjb250cm9sX25hXCIpICU+JVxuICAgICAgICBkcGx5cjo6c2VsZWN0KGMoRUdBLCBET1MsIElEKSkgJT4lXG4gICAgICAgIGRwbHlyOjpmaWx0ZXIoIWdyZXBsKFwicHBcIiwgSUQpKSAlPiVcbiAgICAgICAgZ3JvdXBfYnkoSUQpICU+JVxuICAgICAgICBkcGx5cjo6ZmlsdGVyKHJvd19udW1iZXIoKT09MSkgJT4lXG4gICAgICAgIGRwbHlyOjptdXRhdGUoRE9TID0gYXMubnVtZXJpYyhET1MpKSAlPiVcbiAgICAgICAgZHBseXI6Om11dGF0ZShFR0EgPSBhcy5udW1lcmljKEVHQSkpXG5gYGAifQ== -->
+<pre class="r"><code># Removing remaining unrelevant data for ML models
+x = final_data[!grepl(&quot;pp&quot;, final_data$ID),] %&gt;% #removing pp ID which correspond to post partum data
+      dcast(ID ~ population + reagent + stimulation, value.var = &quot;feature&quot;)
 
 # Importing the row data again to get the outcomes (DOS) and the EGA
 TTL = read.csv(funct_path) %&gt;%
-        rename(\stimulation\ = \Stims\) %&gt;%
-        dplyr::mutate(ID = paste0(\P\,ID, \_\, GA)) %&gt;% # Creating a new index ID
-        dplyr::filter(ID != \Pinternalcontrol_na\) %&gt;%
+        rename(&quot;stimulation&quot; = &quot;Stims&quot;) %&gt;%
+        dplyr::mutate(ID = paste0(&quot;P&quot;,ID, &quot;_&quot;, GA)) %&gt;% # Creating a new index ID
+        dplyr::filter(ID != &quot;Pinternalcontrol_na&quot;) %&gt;%
         dplyr::select(c(EGA, DOS, ID)) %&gt;%
-        dplyr::filter(!grepl(\pp\, ID)) %&gt;%
+        dplyr::filter(!grepl(&quot;pp&quot;, ID)) %&gt;%
         group_by(ID) %&gt;%
         dplyr::filter(row_number()==1) %&gt;%
         dplyr::mutate(DOS = as.numeric(DOS)) %&gt;%
         dplyr::mutate(EGA = as.numeric(EGA))</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Useful datasets to build ML models.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuIyBEYXRhc2V0IG9mIGltbXVub21lIGZlYXR1cmVzIHdpdGggbm8gRXN0aW1hdG9yIG9mIEdlc3RhdGlvbmFsIEFnZSAoRUdBKVxuaW1fbm9FR0EgPSB4XG4jIERhdGFzZXQgb2YgaW1tdW5vbWUgZmVhdHVyZXMgd2l0aCBubyBFR0EgYW5kIHdpdGggRE9TIChvdXRjb21lKVxuaW1fbm9FR0FfRE9TID0gbWVyZ2UoeCwgZHBseXI6OnNlbGVjdChUVEwsIFxcRE9TXFwpLCBieSA9IFxcSURcXClcbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-# Dataset of immunome features with no Estimator of Gestational Age (EGA)
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Useful datasets to build ML models.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBEYXRhc2V0IG9mIGltbXVub21lIGZlYXR1cmVzIHdpdGggbm8gRXN0aW1hdG9yIG9mIEdlc3RhdGlvbmFsIEFnZSAoRUdBKVxuaW1fbm9FR0EgPSB4XG4jIERhdGFzZXQgb2YgaW1tdW5vbWUgZmVhdHVyZXMgd2l0aCBubyBFR0EgYW5kIHdpdGggRE9TIChvdXRjb21lKVxuaW1fbm9FR0FfRE9TID0gbWVyZ2UoeCwgZHBseXI6OnNlbGVjdChUVEwsIFwiRE9TXCIpLCBieSA9IFwiSURcIilcbmBgYCJ9 -->
+<pre class="r"><code># Dataset of immunome features with no Estimator of Gestational Age (EGA)
 im_noEGA = x
 # Dataset of immunome features with no EGA and with DOS (outcome)
-im_noEGA_DOS = merge(x, dplyr::select(TTL, \DOS\), by = \ID\)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoiQWRkaW5nIG1pc3NpbmcgZ3JvdXBpbmcgdmFyaWFibGVzOiBgSURgXG4ifQ== --&gt;
-</code></pre>
-<p>Adding missing grouping variables: <code>ID</code></p>
-<pre><code>
-
-
-&lt;!-- rnb-output-end --&gt;
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuIyBEYXRhc2V0IHdpdGggRUdBXG5pbV9FR0EgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgXFxFR0FcXCksIGJ5ID0gXFxJRFxcKVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
-# Dataset with EGA
-im_EGA = merge(x, dplyr::select(TTL, \EGA\), by = \ID\)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoiQWRkaW5nIG1pc3NpbmcgZ3JvdXBpbmcgdmFyaWFibGVzOiBgSURgXG4ifQ== --&gt;
-</code></pre>
-<p>Adding missing grouping variables: <code>ID</code></p>
-<pre><code>
-
-
-&lt;!-- rnb-output-end --&gt;
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuIyBEYXRhc2V0IHdpdGggRUdBIHFuZCBET1NcbmltX0VHQV9ET1MgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgYyhcXEVHQVxcLCBcXERPU1xcKSksIGJ5ID0gXFxJRFxcKVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
-# Dataset with EGA qnd DOS
-im_EGA_DOS = merge(x, dplyr::select(TTL, c(\EGA\, \DOS\)), by = \ID\)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoiQWRkaW5nIG1pc3NpbmcgZ3JvdXBpbmcgdmFyaWFibGVzOiBgSURgXG4ifQ== --&gt;
-</code></pre>
-<p>Adding missing grouping variables: <code>ID</code></p>
-<pre><code>
-
-
-&lt;!-- rnb-output-end --&gt;
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuIyBEYXRhc2V0IGNvbnRhaW5pbmcgdGhlIHBhdGllbnQgSUQgKGZvciBMZWF2ZU9uZUdyb3VwT3V0IGNyb3NzIHZhbGlkYXRpb24pXG5JZCA8LSBkcGx5cjo6c2VsZWN0KHgsIElEKSAlPiUgZHBseXI6Om11dGF0ZShwYXRpZW50SUQgPSBhcy5mYWN0b3Ioc3RyX2V4dHJhY3QoSUQsIFxcKD88PVApXFxcXGQrXFwpKSlcbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-# Dataset containing the patient ID (for LeaveOneGroupOut cross validation)
-Id &lt;- dplyr::select(x, ID) %&gt;% dplyr::mutate(patientID = as.factor(str_extract(ID, \(?&lt;=P)\\d+\)))</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Saving the datasets.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxud3JpdGUuY3N2KGltX25vRUdBLCBwYXN0ZTAob3V0X3BhdGgsIFxcL2ltbXVub21lX25vRUdBX09PTC5jc3ZcXCksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9ub0VHQV9ET1MsIHBhc3RlMChvdXRfcGF0aCwgXFwvaW1tdW5vbWVfbm9FR0FfRE9TX09PTC5jc3ZcXCksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9FR0EsIHBhc3RlMChvdXRfcGF0aCwgXFwvaW1tdW5vbWVfRUdBX09PTC5jc3ZcXCksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9FR0FfRE9TLCBwYXN0ZTAob3V0X3BhdGgsIFxcL2ltbXVub21lX0VHQV9ET1NfT09MLmNzdlxcKSwgcm93Lm5hbWVzPUZBTFNFKVxud3JpdGUuY3N2KElkLCBwYXN0ZTAob3V0X3BhdGgsIFxcL3BhdGllbnRJRC5jc3ZcXCksIHJvdy5uYW1lcz1GQUxTRSlcbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-write.csv(im_noEGA, paste0(out_path, \/immunome_noEGA_OOL.csv\), row.names=FALSE)
-write.csv(im_noEGA_DOS, paste0(out_path, \/immunome_noEGA_DOS_OOL.csv\), row.names=FALSE)
-write.csv(im_EGA, paste0(out_path, \/immunome_EGA_OOL.csv\), row.names=FALSE)
-write.csv(im_EGA_DOS, paste0(out_path, \/immunome_EGA_DOS_OOL.csv\), row.names=FALSE)
-write.csv(Id, paste0(out_path, \/patientID.csv\), row.names=FALSE)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Creating separated csv files for the outcomes (DOS) and EGA.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuRE9TID0gc3Vic2V0KFRUTCwgc2VsZWN0ID0gYyhJRCwgRE9TKSlcbkVHQSA9IHN1YnNldChUVEwsIHNlbGVjdCA9IGMoSUQsIEVHQSkpXG53cml0ZS5jc3YoRE9TLCBwYXN0ZTAob3V0X3BhdGgsIFxcL291dGNvbWVfT09MLmNzdlxcKSwgcm93Lm5hbWVzPUZBTFNFKVxud3JpdGUuY3N2KEVHQSwgcGFzdGUwKG91dF9wYXRoLCBcXC9FR0FfT09MLmNzdlxcKSwgcm93Lm5hbWVzPUZBTFNFKVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
-DOS = subset(TTL, select = c(ID, DOS))
+im_noEGA_DOS = merge(x, dplyr::select(TTL, &quot;DOS&quot;), by = &quot;ID&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiQWRkaW5nIG1pc3NpbmcgZ3JvdXBpbmcgdmFyaWFibGVzOiBgSURgXG4ifQ== -->
+<pre><code>Adding missing grouping variables: `ID`</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBEYXRhc2V0IHdpdGggRUdBXG5pbV9FR0EgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgXCJFR0FcIiksIGJ5ID0gXCJJRFwiKVxuYGBgIn0= -->
+<pre class="r"><code># Dataset with EGA
+im_EGA = merge(x, dplyr::select(TTL, &quot;EGA&quot;), by = &quot;ID&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiQWRkaW5nIG1pc3NpbmcgZ3JvdXBpbmcgdmFyaWFibGVzOiBgSURgXG4ifQ== -->
+<pre><code>Adding missing grouping variables: `ID`</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBEYXRhc2V0IHdpdGggRUdBIHFuZCBET1NcbmltX0VHQV9ET1MgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgYyhcIkVHQVwiLCBcIkRPU1wiKSksIGJ5ID0gXCJJRFwiKVxuYGBgIn0= -->
+<pre class="r"><code># Dataset with EGA qnd DOS
+im_EGA_DOS = merge(x, dplyr::select(TTL, c(&quot;EGA&quot;, &quot;DOS&quot;)), by = &quot;ID&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiQWRkaW5nIG1pc3NpbmcgZ3JvdXBpbmcgdmFyaWFibGVzOiBgSURgXG4ifQ== -->
+<pre><code>Adding missing grouping variables: `ID`</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBEYXRhc2V0IGNvbnRhaW5pbmcgdGhlIHBhdGllbnQgSUQgKGZvciBMZWF2ZU9uZUdyb3VwT3V0IGNyb3NzIHZhbGlkYXRpb24pXG5JZCA8LSBkcGx5cjo6c2VsZWN0KHgsIElEKSAlPiUgZHBseXI6Om11dGF0ZShwYXRpZW50SUQgPSBhcy5mYWN0b3Ioc3RyX2V4dHJhY3QoSUQsIFwiKD88PVApXFxcXGQrXCIpKSlcbmBgYCJ9 -->
+<pre class="r"><code># Dataset containing the patient ID (for LeaveOneGroupOut cross validation)
+Id &lt;- dplyr::select(x, ID) %&gt;% dplyr::mutate(patientID = as.factor(str_extract(ID, &quot;(?&lt;=P)\\d+&quot;)))</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Saving the datasets.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxud3JpdGUuY3N2KGltX25vRUdBLCBwYXN0ZTAob3V0X3BhdGgsIFwiL2ltbXVub21lX25vRUdBX09PTC5jc3ZcIiksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9ub0VHQV9ET1MsIHBhc3RlMChvdXRfcGF0aCwgXCIvaW1tdW5vbWVfbm9FR0FfRE9TX09PTC5jc3ZcIiksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9FR0EsIHBhc3RlMChvdXRfcGF0aCwgXCIvaW1tdW5vbWVfRUdBX09PTC5jc3ZcIiksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9FR0FfRE9TLCBwYXN0ZTAob3V0X3BhdGgsIFwiL2ltbXVub21lX0VHQV9ET1NfT09MLmNzdlwiKSwgcm93Lm5hbWVzPUZBTFNFKVxud3JpdGUuY3N2KElkLCBwYXN0ZTAob3V0X3BhdGgsIFwiL3BhdGllbnRJRC5jc3ZcIiksIHJvdy5uYW1lcz1GQUxTRSlcbmBgYCJ9 -->
+<pre class="r"><code>write.csv(im_noEGA, paste0(out_path, &quot;/immunome_noEGA_OOL.csv&quot;), row.names=FALSE)
+write.csv(im_noEGA_DOS, paste0(out_path, &quot;/immunome_noEGA_DOS_OOL.csv&quot;), row.names=FALSE)
+write.csv(im_EGA, paste0(out_path, &quot;/immunome_EGA_OOL.csv&quot;), row.names=FALSE)
+write.csv(im_EGA_DOS, paste0(out_path, &quot;/immunome_EGA_DOS_OOL.csv&quot;), row.names=FALSE)
+write.csv(Id, paste0(out_path, &quot;/patientID.csv&quot;), row.names=FALSE)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Creating separated csv files for the outcomes (DOS) and EGA.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuRE9TID0gc3Vic2V0KFRUTCwgc2VsZWN0ID0gYyhJRCwgRE9TKSlcbkVHQSA9IHN1YnNldChUVEwsIHNlbGVjdCA9IGMoSUQsIEVHQSkpXG53cml0ZS5jc3YoRE9TLCBwYXN0ZTAob3V0X3BhdGgsIFwiL291dGNvbWVfT09MLmNzdlwiKSwgcm93Lm5hbWVzPUZBTFNFKVxud3JpdGUuY3N2KEVHQSwgcGFzdGUwKG91dF9wYXRoLCBcIi9FR0FfT09MLmNzdlwiKSwgcm93Lm5hbWVzPUZBTFNFKVxuYGBgIn0= -->
+<pre class="r"><code>DOS = subset(TTL, select = c(ID, DOS))
 EGA = subset(TTL, select = c(ID, EGA))
-write.csv(DOS, paste0(out_path, \/outcome_OOL.csv\), row.names=FALSE)
-write.csv(EGA, paste0(out_path, \/EGA_OOL.csv\), row.names=FALSE)</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-### Penalized Data
-
-This is function taking a penalization matrix and the name of the stimulation associated with the matrix and returning the list of the 
-features to be removed from the analysis.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxucGVuYWxpemF0aW9uX3ByZXByb2Nlc3NpbmcgPC0gZnVuY3Rpb24ocGVuYWxpemF0aW9uX21hdHJpeCwgc3RpbS5uYW1lKXtcbiAgcGVuYWxpemF0aW9uX21hdHJpeCA8LSBwZW5hbGl6YXRpb25fbWF0cml4ICU+JVxuICBgY29sbmFtZXM8LWAoYyhcXHBvcHVsYXRpb25cXCwgY29sbmFtZXMocGVuYWxpemF0aW9uX21hdHJpeClbLTFdKSkgJT4lXG4gIGRwbHlyOjptdXRhdGUocG9wdWxhdGlvbiA9IGFzLmZhY3Rvcihwb3B1bGF0aW9uKSkgJT4lXG4gIGdhdGhlcihcXHByb3RlaW5cXCwgXFxwZW5hbGl6YXRpb25cXCwgLXBvcHVsYXRpb24pICU+JVxuICBkcGx5cjo6bXV0YXRlKGZlYXR1cmUgPSBwYXN0ZShwb3B1bGF0aW9uLCBcXF9cXCwgcHJvdGVpbiwgXFxfXFwsIHN0aW0ubmFtZSwgc2VwPVxcXFwpKSAlPiVcbiAgZHBseXI6OmZpbHRlcihwZW5hbGl6YXRpb24gPT0gMCkgJT4lXG4gIGRwbHlyOjptdXRhdGUoZmVhdHVyZSA9IHN1YihcXF9bXl9dKl9cXCwgXFxfXFwsIGZlYXR1cmUpKVxufVxuYGBgXG5gYGAifQ== --&gt;
-
-```r
-```r
-penalization_preprocessing &lt;- function(penalization_matrix, stim.name){
+write.csv(DOS, paste0(out_path, &quot;/outcome_OOL.csv&quot;), row.names=FALSE)
+write.csv(EGA, paste0(out_path, &quot;/EGA_OOL.csv&quot;), row.names=FALSE)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="penalized-data" class="section level3">
+<h3>Penalized Data</h3>
+<p>This is function taking a penalization matrix and the name of the
+stimulation associated with the matrix and returning the list of the
+features to be removed from the analysis.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucGVuYWxpemF0aW9uX3ByZXByb2Nlc3NpbmcgPC0gZnVuY3Rpb24ocGVuYWxpemF0aW9uX21hdHJpeCwgc3RpbS5uYW1lKXtcbiAgcGVuYWxpemF0aW9uX21hdHJpeCA8LSBwZW5hbGl6YXRpb25fbWF0cml4ICU+JVxuICBgY29sbmFtZXM8LWAoYyhcInBvcHVsYXRpb25cIiwgY29sbmFtZXMocGVuYWxpemF0aW9uX21hdHJpeClbLTFdKSkgJT4lXG4gIGRwbHlyOjptdXRhdGUocG9wdWxhdGlvbiA9IGFzLmZhY3Rvcihwb3B1bGF0aW9uKSkgJT4lXG4gIGdhdGhlcihcInByb3RlaW5cIiwgXCJwZW5hbGl6YXRpb25cIiwgLXBvcHVsYXRpb24pICU+JVxuICBkcGx5cjo6bXV0YXRlKGZlYXR1cmUgPSBwYXN0ZShwb3B1bGF0aW9uLCBcIl9cIiwgcHJvdGVpbiwgXCJfXCIsIHN0aW0ubmFtZSwgc2VwPVwiXCIpKSAlPiVcbiAgZHBseXI6OmZpbHRlcihwZW5hbGl6YXRpb24gPT0gMCkgJT4lXG4gIGRwbHlyOjptdXRhdGUoZmVhdHVyZSA9IHN1YihcIl9bXl9dKl9cIiwgXCJfXCIsIGZlYXR1cmUpKVxufVxuYGBgIn0= -->
+<pre class="r"><code>penalization_preprocessing &lt;- function(penalization_matrix, stim.name){
   penalization_matrix &lt;- penalization_matrix %&gt;%
-  `colnames&lt;-`(c(\population\, colnames(penalization_matrix)[-1])) %&gt;%
+  `colnames&lt;-`(c(&quot;population&quot;, colnames(penalization_matrix)[-1])) %&gt;%
   dplyr::mutate(population = as.factor(population)) %&gt;%
-  gather(\protein\, \penalization\, -population) %&gt;%
-  dplyr::mutate(feature = paste(population, \_\, protein, \_\, stim.name, sep=\\)) %&gt;%
+  gather(&quot;protein&quot;, &quot;penalization&quot;, -population) %&gt;%
+  dplyr::mutate(feature = paste(population, &quot;_&quot;, protein, &quot;_&quot;, stim.name, sep=&quot;&quot;)) %&gt;%
   dplyr::filter(penalization == 0) %&gt;%
-  dplyr::mutate(feature = sub(\_[^_]*_\, \_\, feature))
+  dplyr::mutate(feature = sub(&quot;_[^_]*_&quot;, &quot;_&quot;, feature))
 }</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Getting all the features to remove due to penalization on each stimulation.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuc3RpbXMgPSBjKFxcSUZOYVxcLFxcTFBTXFwsXFxJTDI0NlxcLFxcR01DU0ZcXClcbmRpc2NhcmQgPSBjKClcbmZvciAoc3RpbSBpbiBzdGltcyl7XG4gIG5ld19wZW5hbGl6YXRpb24gPSBwZW5hbGl6YXRpb25fcHJlcHJvY2Vzc2luZyhyZWFkX3hsc3gocGF0aF90b19wZW5hbGl6YXRpb25fZmlsZSwgc2hlZXQgPSBzdGltKVsxOjEyXSwgc3RpbSlcbiAgZGlzY2FyZCA8LSBjKGRpc2NhcmQsIG5ld19wZW5hbGl6YXRpb24kZmVhdHVyZSlcbn1cbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-stims = c(\IFNa\,\LPS\,\IL246\,\GMCSF\)
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Getting all the features to remove due to penalization on each
+stimulation.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc3RpbXMgPSBjKFwiSUZOYVwiLFwiTFBTXCIsXCJJTDI0NlwiLFwiR01DU0ZcIilcbmRpc2NhcmQgPSBjKClcbmZvciAoc3RpbSBpbiBzdGltcyl7XG4gIG5ld19wZW5hbGl6YXRpb24gPSBwZW5hbGl6YXRpb25fcHJlcHJvY2Vzc2luZyhyZWFkX3hsc3gocGF0aF90b19wZW5hbGl6YXRpb25fZmlsZSwgc2hlZXQgPSBzdGltKVsxOjEyXSwgc3RpbSlcbiAgZGlzY2FyZCA8LSBjKGRpc2NhcmQsIG5ld19wZW5hbGl6YXRpb24kZmVhdHVyZSlcbn1cbmBgYCJ9 -->
+<pre class="r"><code>stims = c(&quot;IFNa&quot;,&quot;LPS&quot;,&quot;IL246&quot;,&quot;GMCSF&quot;)
 discard = c()
 for (stim in stims){
   new_penalization = penalization_preprocessing(read_xlsx(path_to_penalization_file, sheet = stim)[1:12], stim)
   discard &lt;- c(discard, new_penalization$feature)
 }</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Removing penalized features from the unpenalized datasets.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuaW1fbm9FR0FfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fbm9FR0EsIC1vbmVfb2YoZGlzY2FyZCkpXG5pbV9ub0VHQV9ET1NfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fbm9FR0FfRE9TLCAtb25lX29mKGRpc2NhcmQpKVxuaW1fRUdBX3BlbiA8LSBkcGx5cjo6c2VsZWN0KGltX0VHQSwgLW9uZV9vZihkaXNjYXJkKSlcbmltX0VHQV9ET1NfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fRUdBX0RPUywgLW9uZV9vZihkaXNjYXJkKSlcbmBgYFxuYGBgIn0= --&gt;
-
-```r
-```r
-im_noEGA_pen &lt;- dplyr::select(im_noEGA, -one_of(discard))
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiTmV3IG5hbWVzOk5ldyBuYW1lczpOZXcgbmFtZXM6TmV3IG5hbWVzOlxuIn0= -->
+<pre><code>New names:New names:New names:New names:</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Removing penalized features from the unpenalized datasets.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuaW1fbm9FR0FfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fbm9FR0EsIC1vbmVfb2YoZGlzY2FyZCkpXG5pbV9ub0VHQV9ET1NfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fbm9FR0FfRE9TLCAtb25lX29mKGRpc2NhcmQpKVxuaW1fRUdBX3BlbiA8LSBkcGx5cjo6c2VsZWN0KGltX0VHQSwgLW9uZV9vZihkaXNjYXJkKSlcbmltX0VHQV9ET1NfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fRUdBX0RPUywgLW9uZV9vZihkaXNjYXJkKSlcbmBgYCJ9 -->
+<pre class="r"><code>im_noEGA_pen &lt;- dplyr::select(im_noEGA, -one_of(discard))
 im_noEGA_DOS_pen &lt;- dplyr::select(im_noEGA_DOS, -one_of(discard))
 im_EGA_pen &lt;- dplyr::select(im_EGA, -one_of(discard))
 im_EGA_DOS_pen &lt;- dplyr::select(im_EGA_DOS, -one_of(discard))</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-chunk-end --&gt;
-
-
-&lt;!-- rnb-text-begin --&gt;
-
-
-Saving penalized datasets.
-
-
-&lt;!-- rnb-text-end --&gt;
-
-
-&lt;!-- rnb-chunk-begin --&gt;
-
-
-&lt;!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxud3JpdGUuY3N2KGltX25vRUdBX3BlbiwgcGFzdGUwKG91dF9wYXRoLCBcXC9pbW11bm9tZV9ub0VHQV9wZW5fT09MLmNzdlxcKSwgcm93Lm5hbWVzPUZBTFNFKVxud3JpdGUuY3N2KGltX25vRUdBX0RPU19wZW4sIHBhc3RlMChvdXRfcGF0aCwgXFwvaW1tdW5vbWVfbm9FR0FfRE9TX3Blbl9PT0wuY3N2XFwpLCByb3cubmFtZXM9RkFMU0UpXG53cml0ZS5jc3YoaW1fRUdBX3BlbiwgcGFzdGUwKG91dF9wYXRoLCBcXC9pbW11bm9tZV9FR0FfcGVuX09PTC5jc3ZcXCksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9FR0FfRE9TX3BlbiwgcGFzdGUwKG91dF9wYXRoLCBcXC9pbW11bm9tZV9FR0FfRE9TX3Blbl9PT0wuY3N2XFwpLCByb3cubmFtZXM9RkFMU0UpXG5gYGBcbmBgYCJ9 --&gt;
-
-```r
-```r
-write.csv(im_noEGA_pen, paste0(out_path, \/immunome_noEGA_pen_OOL.csv\), row.names=FALSE)
-write.csv(im_noEGA_DOS_pen, paste0(out_path, \/immunome_noEGA_DOS_pen_OOL.csv\), row.names=FALSE)
-write.csv(im_EGA_pen, paste0(out_path, \/immunome_EGA_pen_OOL.csv\), row.names=FALSE)
-write.csv(im_EGA_DOS_pen, paste0(out_path, \/immunome_EGA_DOS_pen_OOL.csv\), row.names=FALSE)</code></pre>
-<p>```</p>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Saving penalized datasets.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxud3JpdGUuY3N2KGltX25vRUdBX3BlbiwgcGFzdGUwKG91dF9wYXRoLCBcIi9pbW11bm9tZV9ub0VHQV9wZW5fT09MLmNzdlwiKSwgcm93Lm5hbWVzPUZBTFNFKVxud3JpdGUuY3N2KGltX25vRUdBX0RPU19wZW4sIHBhc3RlMChvdXRfcGF0aCwgXCIvaW1tdW5vbWVfbm9FR0FfRE9TX3Blbl9PT0wuY3N2XCIpLCByb3cubmFtZXM9RkFMU0UpXG53cml0ZS5jc3YoaW1fRUdBX3BlbiwgcGFzdGUwKG91dF9wYXRoLCBcIi9pbW11bm9tZV9FR0FfcGVuX09PTC5jc3ZcIiksIHJvdy5uYW1lcz1GQUxTRSlcbndyaXRlLmNzdihpbV9FR0FfRE9TX3BlbiwgcGFzdGUwKG91dF9wYXRoLCBcIi9pbW11bm9tZV9FR0FfRE9TX3Blbl9PT0wuY3N2XCIpLCByb3cubmFtZXM9RkFMU0UpXG5gYGAifQ== -->
+<pre class="r"><code>write.csv(im_noEGA_pen, paste0(out_path, &quot;/immunome_noEGA_pen_OOL.csv&quot;), row.names=FALSE)
+write.csv(im_noEGA_DOS_pen, paste0(out_path, &quot;/immunome_noEGA_DOS_pen_OOL.csv&quot;), row.names=FALSE)
+write.csv(im_EGA_pen, paste0(out_path, &quot;/immunome_EGA_pen_OOL.csv&quot;), row.names=FALSE)
+write.csv(im_EGA_DOS_pen, paste0(out_path, &quot;/immunome_EGA_DOS_pen_OOL.csv&quot;), row.names=FALSE)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 </div>
+</div>
 
-<div id="rmd-source-code">LS0tCnRpdGxlOiAiT25zZXQgb2YgTGFib3IgcHJlcHJvY2Vzc2luZyIKb3V0cHV0OiBodG1sX25vdGVib29rCi0tLQojIyBQYXRocwoKSGVyZSB3ZSBzZXQgYWxsIHRoZSBuZWNlc3NhcnkgcGF0aCB0byBpbXBvcnQgYW5kIHNhdmUgZGF0YSBhbmQgcGxvdHMuCgpgYGB7cn0KY3VycmVudF9kaXIgPC0gZ2V0d2QoKQpteV9wYXRoIDwtIHN1YigiL1teL10rJCIsICIiLCBjdXJyZW50X2RpcikKc2V0d2QocGFzdGUwKG15X3BhdGgsIi9Sc2NyaXB0cyIpKQpmdW5jdF9wYXRoPXBhc3RlMChteV9wYXRoLCIvT25zZXQgb2YgTGFib3IgZGF0YS9PbnNldCBvZiBMYWJvciBJbml0aWFsIERhdGEvT25zZXQgb2YgTGFib3IgU3R1ZHkgUmVhbmFseXNpcyBQVEIgZHJ1ZyBhc3NheSBtYXRjaGluZyBnYXRlcy5jc3YiKQpwYXRoX3RvX3BlbmFsaXphdGlvbl9maWxlPXBhc3RlMChteV9wYXRoLCIvT25zZXQgb2YgTGFib3IgZGF0YS9PbnNldCBvZiBMYWJvciBJbml0aWFsIERhdGEvcGVuYWxpemF0aW9uIG1hdHJpeCBkcnVnIGFzc2F5Lnhsc3giKQpvdXRfcGF0aD1wYXN0ZTAobXlfcGF0aCwiL09uc2V0IG9mIExhYm9yIGRhdGEvUHJlcHJvY2Vzc2VkIERhdGEiKQpgYGAKCkNyZWF0aW5nIGEgZGlyZWN0b3J5IGZvciB0aGUgb3V0Y29tZXMKCmBgYHtyfQppZighZmlsZS5leGlzdHMob3V0X3BhdGgpKXtkaXIuY3JlYXRlKG91dF9wYXRoLCByZWN1cnNpdmUgPSBUUlVFKX0KYGBgCgojIyBMaWJyYXJpZXMKCmBgYHtyfQpsaWJyYXJ5KHRpZHlzZWxlY3QpCmxpYnJhcnkocmVzaGFwZTIpCmxpYnJhcnkoZHBseXIpCmxpYnJhcnkodmlyaWRpcykKbGlicmFyeShyZWFkeGwpCmxpYnJhcnkodGlkeXIpCmxpYnJhcnkoc3RyaW5ncikKYGBgCgojIyBSZXN0cnVjdHVyaW5nIHRoZSBEYXRhCgpgYGB7cn0KTXlEYXRhID0gcmVhZC5jc3YoZnVuY3RfcGF0aCkKaGVhZChNeURhdGEpCmBgYAoKV2UgY3JlYXRlIGFuIElELCByZW1vdmUgdGhlIGlzb3RvcGUgbmFtZXMgZnJvbSB0aGUgcmVhZ2VudCBhbmQgcmVtb3ZlIGNvbnRyb2wgc2FtcGxlcyB0aGF0IGFyZSBub3QgcmVsZXZhbnQgaW4gdGhlIGFuYWx5c2lzLgoKYGBge3J9Ck15RGF0YSA9IE15RGF0YSAlPiUKICAgICAgICAgIHJlbmFtZSgic3RpbXVsYXRpb24iID0gIlN0aW1zIikgJT4lCiAgICAgICAgICBkcGx5cjo6bXV0YXRlKHJlYWdlbnQgPSBzdWIoIl5bXl9dKl8iLCAiIiwgcmVhZ2VudCksCiAgICAgICAgICAgICAgICAgICAgICAgIElEID0gcGFzdGUwKCJQIixJRCwgIl8iLCBHQSkpICU+JSAjIENyZWF0aW5nIGEgbmV3IGluZGV4IElECiAgICAgICAgICBkcGx5cjo6ZmlsdGVyKElEICE9ICJQaW50ZXJuYWxjb250cm9sX25hIikgJT4lCiAgICAgICAgICBkcGx5cjo6c2VsZWN0KC1jKEVHQSwgR0EpKQpNeURhdGEkSUQgPSBhcy5jaGFyYWN0ZXIoTXlEYXRhJElEKQpgYGAKCiMjIEZlYXR1cmUgZW5naW5lZXJpbmcKCkhlcmUsIHdlIHVzZSB0aGUgYXNpbmggdHJhbnNmb3JtIG9uIHRoZSBjeXRvbWV0cnkgZGF0YSBhbmQgYnVpbGQgYSBmZWF0dXJlIHRoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiBzdGltdWxhdGVkIGFuZCB1bi1zdGltdWxhdGVkIHNhbXBsZXMKCmBgYHtyfQpmaW5hbF9kYXRhID0gYygpCmZpbCA9IGMoInBvcHVsYXRpb24iLCJyZWFnZW50IiwiSUQiKQpmb3IodGltZXBvaW50IGluIHVuaXF1ZShNeURhdGEkSUQpKXsKICAjIHN1YnNldCBvZiB0aGUgZGF0YSBmb3IgYSBnaXZlbiBJRAogIE15RGF0YV90aW1lcG9pbnQgPSBNeURhdGEgJT4lIGRwbHlyOjpmaWx0ZXIoSUQgPT0gdGltZXBvaW50KQogICMgc3RpbXVsYXRpb25zIGFzc29jaWF0ZWQgdG8gdGhpcyBJRAogIHN0aW1zID0gdW5pcXVlKE15RGF0YV90aW1lcG9pbnQkc3RpbXVsYXRpb24pCiAgIyBhc2luaCB0cmFuc2Zvcm0gYW5kIHJlbW92aW5nIG91dGNvbWVzIChET1MpCiAgTXlEYXRhX3RpbWVwb2ludCA9IE15RGF0YV90aW1lcG9pbnQgJT4lCiAgICAgICAgICAgICAgICAgICAgICAgIGRwbHlyOjptdXRhdGUoZmVhdHVyZSA9IGFzaW5oKG1lZGlhbi81KSkgJT4lCiAgICAgICAgICAgICAgICAgICAgICAgIGRwbHlyOjpzZWxlY3QoLWMoIkRPUyIsICJtZWRpYW4iKSkgJT4lCiAgICAgICAgICAgICAgICAgICAgICAgIHBpdm90X3dpZGVyKG5hbWVzX2Zyb20gPSBzdGltdWxhdGlvbiwgdmFsdWVzX2Zyb20gPSBmZWF0dXJlKQogICMgRGlmZmVyZW5jZSBiZXR3ZWVuIHN0aW0gYW5kIHVuLXN0aW0KICBmb3IgKHN0aW0gaW4gc3RpbXMpewogICAgaWYgKHN0aW0hPSJ1bnN0aW0iKXsKICAgICAgTXlEYXRhX3RpbWVwb2ludFtzdGltXSA9IE15RGF0YV90aW1lcG9pbnRbc3RpbV0gLSBNeURhdGFfdGltZXBvaW50WyJ1bnN0aW0iXQogICAgfQogIH0KICBNeURhdGFfZmluID0gTXlEYXRhX3RpbWVwb2ludCAlPiUKICAgICAgICAgICAgICAgICAgcGl2b3RfbG9uZ2VyKC1hbGxfb2YoZmlsKSwgbmFtZXNfdG89InN0aW11bGF0aW9uIix2YWx1ZXNfdG89ImZlYXR1cmUiKQogICMgQWRkaW5nIHRoZSBuZXcgcHJlcHJvY2Vzc2VkIGRhdGEgdG8gZmluYWxfZGF0YQogIGZpbmFsX2RhdGEgPSByYmluZChmaW5hbF9kYXRhLCBNeURhdGFfZmluKQp9CmBgYAoKU2F2aW5nIGZpbmFsX2RhdGEKCmBgYHtyfQp3cml0ZS5jc3YoZmluYWxfZGF0YSwgcGFzdGUwKG91dF9wYXRoLCAiL3ByZXByb2Nlc3NlZF9PT0wuY3N2IiksIHJvdy5uYW1lcz1GQUxTRSkKYGBgCgojIyBDcmVhdGluZyBkYXRhIGZpbGVzIGZvciBNTCBtb2RlbHMKCiMjIyBVbnBlbmFsaXplZCBkYXRhCgpgYGB7cn0KIyBSZW1vdmluZyByZW1haW5pbmcgdW5yZWxldmFudCBkYXRhIGZvciBNTCBtb2RlbHMKeCA9IGZpbmFsX2RhdGFbIWdyZXBsKCJwcCIsIGZpbmFsX2RhdGEkSUQpLF0gJT4lICNyZW1vdmluZyBwcCBJRCB3aGljaCBjb3JyZXNwb25kIHRvIHBvc3QgcGFydHVtIGRhdGEKICAgICAgZGNhc3QoSUQgfiBwb3B1bGF0aW9uICsgcmVhZ2VudCArIHN0aW11bGF0aW9uLCB2YWx1ZS52YXIgPSAiZmVhdHVyZSIpCgojIEltcG9ydGluZyB0aGUgcm93IGRhdGEgYWdhaW4gdG8gZ2V0IHRoZSBvdXRjb21lcyAoRE9TKSBhbmQgdGhlIEVHQQpUVEwgPSByZWFkLmNzdihmdW5jdF9wYXRoKSAlPiUKICAgICAgICByZW5hbWUoInN0aW11bGF0aW9uIiA9ICJTdGltcyIpICU+JQogICAgICAgIGRwbHlyOjptdXRhdGUoSUQgPSBwYXN0ZTAoIlAiLElELCAiXyIsIEdBKSkgJT4lICMgQ3JlYXRpbmcgYSBuZXcgaW5kZXggSUQKICAgICAgICBkcGx5cjo6ZmlsdGVyKElEICE9ICJQaW50ZXJuYWxjb250cm9sX25hIikgJT4lCiAgICAgICAgZHBseXI6OnNlbGVjdChjKEVHQSwgRE9TLCBJRCkpICU+JQogICAgICAgIGRwbHlyOjpmaWx0ZXIoIWdyZXBsKCJwcCIsIElEKSkgJT4lCiAgICAgICAgZ3JvdXBfYnkoSUQpICU+JQogICAgICAgIGRwbHlyOjpmaWx0ZXIocm93X251bWJlcigpPT0xKSAlPiUKICAgICAgICBkcGx5cjo6bXV0YXRlKERPUyA9IGFzLm51bWVyaWMoRE9TKSkgJT4lCiAgICAgICAgZHBseXI6Om11dGF0ZShFR0EgPSBhcy5udW1lcmljKEVHQSkpCmBgYAoKVXNlZnVsIGRhdGFzZXRzIHRvIGJ1aWxkIE1MIG1vZGVscy4KCmBgYHtyfQojIERhdGFzZXQgb2YgaW1tdW5vbWUgZmVhdHVyZXMgd2l0aCBubyBFc3RpbWF0b3Igb2YgR2VzdGF0aW9uYWwgQWdlIChFR0EpCmltX25vRUdBID0geAojIERhdGFzZXQgb2YgaW1tdW5vbWUgZmVhdHVyZXMgd2l0aCBubyBFR0EgYW5kIHdpdGggRE9TIChvdXRjb21lKQppbV9ub0VHQV9ET1MgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgIkRPUyIpLCBieSA9ICJJRCIpCiMgRGF0YXNldCB3aXRoIEVHQQppbV9FR0EgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgIkVHQSIpLCBieSA9ICJJRCIpCiMgRGF0YXNldCB3aXRoIEVHQSBxbmQgRE9TCmltX0VHQV9ET1MgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgYygiRUdBIiwgIkRPUyIpKSwgYnkgPSAiSUQiKQojIERhdGFzZXQgY29udGFpbmluZyB0aGUgcGF0aWVudCBJRCAoZm9yIExlYXZlT25lR3JvdXBPdXQgY3Jvc3MgdmFsaWRhdGlvbikKSWQgPC0gZHBseXI6OnNlbGVjdCh4LCBJRCkgJT4lIGRwbHlyOjptdXRhdGUocGF0aWVudElEID0gYXMuZmFjdG9yKHN0cl9leHRyYWN0KElELCAiKD88PVApXFxkKyIpKSkKYGBgCgpTYXZpbmcgdGhlIGRhdGFzZXRzLgoKYGBge3J9CndyaXRlLmNzdihpbV9ub0VHQSwgcGFzdGUwKG91dF9wYXRoLCAiL2ltbXVub21lX25vRUdBX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fbm9FR0FfRE9TLCBwYXN0ZTAob3V0X3BhdGgsICIvaW1tdW5vbWVfbm9FR0FfRE9TX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fRUdBLCBwYXN0ZTAob3V0X3BhdGgsICIvaW1tdW5vbWVfRUdBX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fRUdBX0RPUywgcGFzdGUwKG91dF9wYXRoLCAiL2ltbXVub21lX0VHQV9ET1NfT09MLmNzdiIpLCByb3cubmFtZXM9RkFMU0UpCndyaXRlLmNzdihJZCwgcGFzdGUwKG91dF9wYXRoLCAiL3BhdGllbnRJRC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQpgYGAKCkNyZWF0aW5nIHNlcGFyYXRlZCBjc3YgZmlsZXMgZm9yIHRoZSBvdXRjb21lcyAoRE9TKSBhbmQgRUdBLgoKYGBge3J9CkRPUyA9IHN1YnNldChUVEwsIHNlbGVjdCA9IGMoSUQsIERPUykpCkVHQSA9IHN1YnNldChUVEwsIHNlbGVjdCA9IGMoSUQsIEVHQSkpCndyaXRlLmNzdihET1MsIHBhc3RlMChvdXRfcGF0aCwgIi9vdXRjb21lX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoRUdBLCBwYXN0ZTAob3V0X3BhdGgsICIvRUdBX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQpgYGAKCiMjIyBQZW5hbGl6ZWQgRGF0YQoKVGhpcyBpcyBmdW5jdGlvbiB0YWtpbmcgYSBwZW5hbGl6YXRpb24gbWF0cml4IGFuZCB0aGUgbmFtZSBvZiB0aGUgc3RpbXVsYXRpb24gYXNzb2NpYXRlZCB3aXRoIHRoZSBtYXRyaXggYW5kIHJldHVybmluZyB0aGUgbGlzdCBvZiB0aGUgCmZlYXR1cmVzIHRvIGJlIHJlbW92ZWQgZnJvbSB0aGUgYW5hbHlzaXMuCgpgYGB7cn0KcGVuYWxpemF0aW9uX3ByZXByb2Nlc3NpbmcgPC0gZnVuY3Rpb24ocGVuYWxpemF0aW9uX21hdHJpeCwgc3RpbS5uYW1lKXsKICBwZW5hbGl6YXRpb25fbWF0cml4IDwtIHBlbmFsaXphdGlvbl9tYXRyaXggJT4lCiAgYGNvbG5hbWVzPC1gKGMoInBvcHVsYXRpb24iLCBjb2xuYW1lcyhwZW5hbGl6YXRpb25fbWF0cml4KVstMV0pKSAlPiUKICBkcGx5cjo6bXV0YXRlKHBvcHVsYXRpb24gPSBhcy5mYWN0b3IocG9wdWxhdGlvbikpICU+JQogIGdhdGhlcigicHJvdGVpbiIsICJwZW5hbGl6YXRpb24iLCAtcG9wdWxhdGlvbikgJT4lCiAgZHBseXI6Om11dGF0ZShmZWF0dXJlID0gcGFzdGUocG9wdWxhdGlvbiwgIl8iLCBwcm90ZWluLCAiXyIsIHN0aW0ubmFtZSwgc2VwPSIiKSkgJT4lCiAgZHBseXI6OmZpbHRlcihwZW5hbGl6YXRpb24gPT0gMCkgJT4lCiAgZHBseXI6Om11dGF0ZShmZWF0dXJlID0gc3ViKCJfW15fXSpfIiwgIl8iLCBmZWF0dXJlKSkKfQpgYGAKCkdldHRpbmcgYWxsIHRoZSBmZWF0dXJlcyB0byByZW1vdmUgZHVlIHRvIHBlbmFsaXphdGlvbiBvbiBlYWNoIHN0aW11bGF0aW9uLgoKYGBge3J9CnN0aW1zID0gYygiSUZOYSIsIkxQUyIsIklMMjQ2IiwiR01DU0YiKQpkaXNjYXJkID0gYygpCmZvciAoc3RpbSBpbiBzdGltcyl7CiAgbmV3X3BlbmFsaXphdGlvbiA9IHBlbmFsaXphdGlvbl9wcmVwcm9jZXNzaW5nKHJlYWRfeGxzeChwYXRoX3RvX3BlbmFsaXphdGlvbl9maWxlLCBzaGVldCA9IHN0aW0pWzE6MTJdLCBzdGltKQogIGRpc2NhcmQgPC0gYyhkaXNjYXJkLCBuZXdfcGVuYWxpemF0aW9uJGZlYXR1cmUpCn0KYGBgCgpSZW1vdmluZyBwZW5hbGl6ZWQgZmVhdHVyZXMgZnJvbSB0aGUgdW5wZW5hbGl6ZWQgZGF0YXNldHMuCgpgYGB7cn0KaW1fbm9FR0FfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fbm9FR0EsIC1vbmVfb2YoZGlzY2FyZCkpCmltX25vRUdBX0RPU19wZW4gPC0gZHBseXI6OnNlbGVjdChpbV9ub0VHQV9ET1MsIC1vbmVfb2YoZGlzY2FyZCkpCmltX0VHQV9wZW4gPC0gZHBseXI6OnNlbGVjdChpbV9FR0EsIC1vbmVfb2YoZGlzY2FyZCkpCmltX0VHQV9ET1NfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fRUdBX0RPUywgLW9uZV9vZihkaXNjYXJkKSkKYGBgCgpTYXZpbmcgcGVuYWxpemVkIGRhdGFzZXRzLgoKYGBge3J9CndyaXRlLmNzdihpbV9ub0VHQV9wZW4sIHBhc3RlMChvdXRfcGF0aCwgIi9pbW11bm9tZV9ub0VHQV9wZW5fT09MLmNzdiIpLCByb3cubmFtZXM9RkFMU0UpCndyaXRlLmNzdihpbV9ub0VHQV9ET1NfcGVuLCBwYXN0ZTAob3V0X3BhdGgsICIvaW1tdW5vbWVfbm9FR0FfRE9TX3Blbl9PT0wuY3N2IiksIHJvdy5uYW1lcz1GQUxTRSkKd3JpdGUuY3N2KGltX0VHQV9wZW4sIHBhc3RlMChvdXRfcGF0aCwgIi9pbW11bm9tZV9FR0FfcGVuX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fRUdBX0RPU19wZW4sIHBhc3RlMChvdXRfcGF0aCwgIi9pbW11bm9tZV9FR0FfRE9TX3Blbl9PT0wuY3N2IiksIHJvdy5uYW1lcz1GQUxTRSkKYGBg</div>
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiT25zZXQgb2YgTGFib3IgcHJlcHJvY2Vzc2luZyIKb3V0cHV0OiBodG1sX25vdGVib29rCi0tLQojIyBQYXRocwoKSGVyZSB3ZSBzZXQgYWxsIHRoZSBuZWNlc3NhcnkgcGF0aCB0byBpbXBvcnQgYW5kIHNhdmUgZGF0YSBhbmQgcGxvdHMuCgpgYGB7cn0KY3VycmVudF9kaXIgPC0gZ2V0d2QoKQpteV9wYXRoIDwtIHN1YigiL1teL10rJCIsICIiLCBjdXJyZW50X2RpcikKc2V0d2QocGFzdGUwKG15X3BhdGgsIi9Sc2NyaXB0cyIpKQpmdW5jdF9wYXRoPXBhc3RlMChteV9wYXRoLCIvT25zZXQgb2YgTGFib3IgZGF0YS9PbnNldCBvZiBMYWJvciBJbml0aWFsIERhdGEvT25zZXQgb2YgTGFib3IgU3R1ZHkgUmVhbmFseXNpcyBQVEIgZHJ1ZyBhc3NheSBtYXRjaGluZyBnYXRlcy5jc3YiKQpwYXRoX3RvX3BlbmFsaXphdGlvbl9maWxlPXBhc3RlMChteV9wYXRoLCIvT25zZXQgb2YgTGFib3IgZGF0YS9PbnNldCBvZiBMYWJvciBJbml0aWFsIERhdGEvcGVuYWxpemF0aW9uIG1hdHJpeCBkcnVnIGFzc2F5Lnhsc3giKQpvdXRfcGF0aD1wYXN0ZTAobXlfcGF0aCwiL09uc2V0IG9mIExhYm9yIGRhdGEvUHJlcHJvY2Vzc2VkIERhdGEiKQpgYGAKCkNyZWF0aW5nIGEgZGlyZWN0b3J5IGZvciB0aGUgb3V0Y29tZXMKCmBgYHtyfQppZighZmlsZS5leGlzdHMob3V0X3BhdGgpKXtkaXIuY3JlYXRlKG91dF9wYXRoLCByZWN1cnNpdmUgPSBUUlVFKX0KYGBgCgojIyBMaWJyYXJpZXMKCmBgYHtyfQpsaWJyYXJ5KHRpZHlzZWxlY3QpCmxpYnJhcnkocmVzaGFwZTIpCmxpYnJhcnkoZHBseXIpCmxpYnJhcnkodmlyaWRpcykKbGlicmFyeShyZWFkeGwpCmxpYnJhcnkodGlkeXIpCmxpYnJhcnkoc3RyaW5ncikKYGBgCgojIyBSZXN0cnVjdHVyaW5nIHRoZSBEYXRhCgpgYGB7cn0KTXlEYXRhID0gcmVhZC5jc3YoZnVuY3RfcGF0aCkKaGVhZChNeURhdGEpCmBgYAoKV2UgY3JlYXRlIGFuIElELCByZW1vdmUgdGhlIGlzb3RvcGUgbmFtZXMgZnJvbSB0aGUgcmVhZ2VudCBhbmQgcmVtb3ZlIGNvbnRyb2wgc2FtcGxlcyB0aGF0IGFyZSBub3QgcmVsZXZhbnQgaW4gdGhlIGFuYWx5c2lzLgoKYGBge3J9Ck15RGF0YSA9IE15RGF0YSAlPiUKICAgICAgICAgIHJlbmFtZSgic3RpbXVsYXRpb24iID0gIlN0aW1zIikgJT4lCiAgICAgICAgICBkcGx5cjo6bXV0YXRlKHJlYWdlbnQgPSBzdWIoIl5bXl9dKl8iLCAiIiwgcmVhZ2VudCksCiAgICAgICAgICAgICAgICAgICAgICAgIElEID0gcGFzdGUwKCJQIixJRCwgIl8iLCBHQSkpICU+JSAjIENyZWF0aW5nIGEgbmV3IGluZGV4IElECiAgICAgICAgICBkcGx5cjo6ZmlsdGVyKElEICE9ICJQaW50ZXJuYWxjb250cm9sX25hIikgJT4lCiAgICAgICAgICBkcGx5cjo6c2VsZWN0KC1jKEVHQSwgR0EpKQpNeURhdGEkSUQgPSBhcy5jaGFyYWN0ZXIoTXlEYXRhJElEKQpgYGAKCiMjIEZlYXR1cmUgZW5naW5lZXJpbmcKCkhlcmUsIHdlIHVzZSB0aGUgYXNpbmggdHJhbnNmb3JtIG9uIHRoZSBjeXRvbWV0cnkgZGF0YSBhbmQgYnVpbGQgYSBmZWF0dXJlIHRoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiBzdGltdWxhdGVkIGFuZCB1bi1zdGltdWxhdGVkIHNhbXBsZXMKCmBgYHtyfQpmaW5hbF9kYXRhID0gYygpCmZpbCA9IGMoInBvcHVsYXRpb24iLCJyZWFnZW50IiwiSUQiKQpmb3IodGltZXBvaW50IGluIHVuaXF1ZShNeURhdGEkSUQpKXsKICAjIHN1YnNldCBvZiB0aGUgZGF0YSBmb3IgYSBnaXZlbiBJRAogIE15RGF0YV90aW1lcG9pbnQgPSBNeURhdGEgJT4lIGRwbHlyOjpmaWx0ZXIoSUQgPT0gdGltZXBvaW50KQogICMgc3RpbXVsYXRpb25zIGFzc29jaWF0ZWQgdG8gdGhpcyBJRAogIHN0aW1zID0gdW5pcXVlKE15RGF0YV90aW1lcG9pbnQkc3RpbXVsYXRpb24pCiAgIyBhc2luaCB0cmFuc2Zvcm0gYW5kIHJlbW92aW5nIG91dGNvbWVzIChET1MpCiAgTXlEYXRhX3RpbWVwb2ludCA9IE15RGF0YV90aW1lcG9pbnQgJT4lCiAgICAgICAgICAgICAgICAgICAgICAgIGRwbHlyOjptdXRhdGUoZmVhdHVyZSA9IGFzaW5oKG1lZGlhbi81KSkgJT4lCiAgICAgICAgICAgICAgICAgICAgICAgIGRwbHlyOjpzZWxlY3QoLWMoIkRPUyIsICJtZWRpYW4iKSkgJT4lCiAgICAgICAgICAgICAgICAgICAgICAgIHBpdm90X3dpZGVyKG5hbWVzX2Zyb20gPSBzdGltdWxhdGlvbiwgdmFsdWVzX2Zyb20gPSBmZWF0dXJlKQogICMgRGlmZmVyZW5jZSBiZXR3ZWVuIHN0aW0gYW5kIHVuLXN0aW0KICBmb3IgKHN0aW0gaW4gc3RpbXMpewogICAgaWYgKHN0aW0hPSJ1bnN0aW0iKXsKICAgICAgTXlEYXRhX3RpbWVwb2ludFtzdGltXSA9IE15RGF0YV90aW1lcG9pbnRbc3RpbV0gLSBNeURhdGFfdGltZXBvaW50WyJ1bnN0aW0iXQogICAgfQogIH0KICBNeURhdGFfZmluID0gTXlEYXRhX3RpbWVwb2ludCAlPiUKICAgICAgICAgICAgICAgICAgcGl2b3RfbG9uZ2VyKC1hbGxfb2YoZmlsKSwgbmFtZXNfdG89InN0aW11bGF0aW9uIix2YWx1ZXNfdG89ImZlYXR1cmUiKQogICMgQWRkaW5nIHRoZSBuZXcgcHJlcHJvY2Vzc2VkIGRhdGEgdG8gZmluYWxfZGF0YQogIGZpbmFsX2RhdGEgPSByYmluZChmaW5hbF9kYXRhLCBNeURhdGFfZmluKQp9CmBgYAoKU2F2aW5nIGZpbmFsX2RhdGEKCmBgYHtyfQp3cml0ZS5jc3YoZmluYWxfZGF0YSwgcGFzdGUwKG91dF9wYXRoLCAiL3ByZXByb2Nlc3NlZF9PT0wuY3N2IiksIHJvdy5uYW1lcz1GQUxTRSkKYGBgCgojIyBDcmVhdGluZyBkYXRhIGZpbGVzIGZvciBNTCBtb2RlbHMKCiMjIyBVbnBlbmFsaXplZCBkYXRhCgpgYGB7cn0KIyBSZW1vdmluZyByZW1haW5pbmcgdW5yZWxldmFudCBkYXRhIGZvciBNTCBtb2RlbHMKeCA9IGZpbmFsX2RhdGFbIWdyZXBsKCJwcCIsIGZpbmFsX2RhdGEkSUQpLF0gJT4lICNyZW1vdmluZyBwcCBJRCB3aGljaCBjb3JyZXNwb25kIHRvIHBvc3QgcGFydHVtIGRhdGEKICAgICAgZGNhc3QoSUQgfiBwb3B1bGF0aW9uICsgcmVhZ2VudCArIHN0aW11bGF0aW9uLCB2YWx1ZS52YXIgPSAiZmVhdHVyZSIpCgojIEltcG9ydGluZyB0aGUgcm93IGRhdGEgYWdhaW4gdG8gZ2V0IHRoZSBvdXRjb21lcyAoRE9TKSBhbmQgdGhlIEVHQQpUVEwgPSByZWFkLmNzdihmdW5jdF9wYXRoKSAlPiUKICAgICAgICByZW5hbWUoInN0aW11bGF0aW9uIiA9ICJTdGltcyIpICU+JQogICAgICAgIGRwbHlyOjptdXRhdGUoSUQgPSBwYXN0ZTAoIlAiLElELCAiXyIsIEdBKSkgJT4lICMgQ3JlYXRpbmcgYSBuZXcgaW5kZXggSUQKICAgICAgICBkcGx5cjo6ZmlsdGVyKElEICE9ICJQaW50ZXJuYWxjb250cm9sX25hIikgJT4lCiAgICAgICAgZHBseXI6OnNlbGVjdChjKEVHQSwgRE9TLCBJRCkpICU+JQogICAgICAgIGRwbHlyOjpmaWx0ZXIoIWdyZXBsKCJwcCIsIElEKSkgJT4lCiAgICAgICAgZ3JvdXBfYnkoSUQpICU+JQogICAgICAgIGRwbHlyOjpmaWx0ZXIocm93X251bWJlcigpPT0xKSAlPiUKICAgICAgICBkcGx5cjo6bXV0YXRlKERPUyA9IGFzLm51bWVyaWMoRE9TKSkgJT4lCiAgICAgICAgZHBseXI6Om11dGF0ZShFR0EgPSBhcy5udW1lcmljKEVHQSkpCmBgYAoKVXNlZnVsIGRhdGFzZXRzIHRvIGJ1aWxkIE1MIG1vZGVscy4KCmBgYHtyfQojIERhdGFzZXQgb2YgaW1tdW5vbWUgZmVhdHVyZXMgd2l0aCBubyBFc3RpbWF0b3Igb2YgR2VzdGF0aW9uYWwgQWdlIChFR0EpCmltX25vRUdBID0geAojIERhdGFzZXQgb2YgaW1tdW5vbWUgZmVhdHVyZXMgd2l0aCBubyBFR0EgYW5kIHdpdGggRE9TIChvdXRjb21lKQppbV9ub0VHQV9ET1MgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgIkRPUyIpLCBieSA9ICJJRCIpCiMgRGF0YXNldCB3aXRoIEVHQQppbV9FR0EgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgIkVHQSIpLCBieSA9ICJJRCIpCiMgRGF0YXNldCB3aXRoIEVHQSBxbmQgRE9TCmltX0VHQV9ET1MgPSBtZXJnZSh4LCBkcGx5cjo6c2VsZWN0KFRUTCwgYygiRUdBIiwgIkRPUyIpKSwgYnkgPSAiSUQiKQojIERhdGFzZXQgY29udGFpbmluZyB0aGUgcGF0aWVudCBJRCAoZm9yIExlYXZlT25lR3JvdXBPdXQgY3Jvc3MgdmFsaWRhdGlvbikKSWQgPC0gZHBseXI6OnNlbGVjdCh4LCBJRCkgJT4lIGRwbHlyOjptdXRhdGUocGF0aWVudElEID0gYXMuZmFjdG9yKHN0cl9leHRyYWN0KElELCAiKD88PVApXFxkKyIpKSkKYGBgCgpTYXZpbmcgdGhlIGRhdGFzZXRzLgoKYGBge3J9CndyaXRlLmNzdihpbV9ub0VHQSwgcGFzdGUwKG91dF9wYXRoLCAiL2ltbXVub21lX25vRUdBX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fbm9FR0FfRE9TLCBwYXN0ZTAob3V0X3BhdGgsICIvaW1tdW5vbWVfbm9FR0FfRE9TX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fRUdBLCBwYXN0ZTAob3V0X3BhdGgsICIvaW1tdW5vbWVfRUdBX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fRUdBX0RPUywgcGFzdGUwKG91dF9wYXRoLCAiL2ltbXVub21lX0VHQV9ET1NfT09MLmNzdiIpLCByb3cubmFtZXM9RkFMU0UpCndyaXRlLmNzdihJZCwgcGFzdGUwKG91dF9wYXRoLCAiL3BhdGllbnRJRC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQpgYGAKCkNyZWF0aW5nIHNlcGFyYXRlZCBjc3YgZmlsZXMgZm9yIHRoZSBvdXRjb21lcyAoRE9TKSBhbmQgRUdBLgoKYGBge3J9CkRPUyA9IHN1YnNldChUVEwsIHNlbGVjdCA9IGMoSUQsIERPUykpCkVHQSA9IHN1YnNldChUVEwsIHNlbGVjdCA9IGMoSUQsIEVHQSkpCndyaXRlLmNzdihET1MsIHBhc3RlMChvdXRfcGF0aCwgIi9vdXRjb21lX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoRUdBLCBwYXN0ZTAob3V0X3BhdGgsICIvRUdBX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQpgYGAKCiMjIyBQZW5hbGl6ZWQgRGF0YQoKVGhpcyBpcyBmdW5jdGlvbiB0YWtpbmcgYSBwZW5hbGl6YXRpb24gbWF0cml4IGFuZCB0aGUgbmFtZSBvZiB0aGUgc3RpbXVsYXRpb24gYXNzb2NpYXRlZCB3aXRoIHRoZSBtYXRyaXggYW5kIHJldHVybmluZyB0aGUgbGlzdCBvZiB0aGUgCmZlYXR1cmVzIHRvIGJlIHJlbW92ZWQgZnJvbSB0aGUgYW5hbHlzaXMuCgpgYGB7cn0KcGVuYWxpemF0aW9uX3ByZXByb2Nlc3NpbmcgPC0gZnVuY3Rpb24ocGVuYWxpemF0aW9uX21hdHJpeCwgc3RpbS5uYW1lKXsKICBwZW5hbGl6YXRpb25fbWF0cml4IDwtIHBlbmFsaXphdGlvbl9tYXRyaXggJT4lCiAgYGNvbG5hbWVzPC1gKGMoInBvcHVsYXRpb24iLCBjb2xuYW1lcyhwZW5hbGl6YXRpb25fbWF0cml4KVstMV0pKSAlPiUKICBkcGx5cjo6bXV0YXRlKHBvcHVsYXRpb24gPSBhcy5mYWN0b3IocG9wdWxhdGlvbikpICU+JQogIGdhdGhlcigicHJvdGVpbiIsICJwZW5hbGl6YXRpb24iLCAtcG9wdWxhdGlvbikgJT4lCiAgZHBseXI6Om11dGF0ZShmZWF0dXJlID0gcGFzdGUocG9wdWxhdGlvbiwgIl8iLCBwcm90ZWluLCAiXyIsIHN0aW0ubmFtZSwgc2VwPSIiKSkgJT4lCiAgZHBseXI6OmZpbHRlcihwZW5hbGl6YXRpb24gPT0gMCkgJT4lCiAgZHBseXI6Om11dGF0ZShmZWF0dXJlID0gc3ViKCJfW15fXSpfIiwgIl8iLCBmZWF0dXJlKSkKfQpgYGAKCkdldHRpbmcgYWxsIHRoZSBmZWF0dXJlcyB0byByZW1vdmUgZHVlIHRvIHBlbmFsaXphdGlvbiBvbiBlYWNoIHN0aW11bGF0aW9uLgoKYGBge3J9CnN0aW1zID0gYygiSUZOYSIsIkxQUyIsIklMMjQ2IiwiR01DU0YiKQpkaXNjYXJkID0gYygpCmZvciAoc3RpbSBpbiBzdGltcyl7CiAgbmV3X3BlbmFsaXphdGlvbiA9IHBlbmFsaXphdGlvbl9wcmVwcm9jZXNzaW5nKHJlYWRfeGxzeChwYXRoX3RvX3BlbmFsaXphdGlvbl9maWxlLCBzaGVldCA9IHN0aW0pWzE6MTJdLCBzdGltKQogIGRpc2NhcmQgPC0gYyhkaXNjYXJkLCBuZXdfcGVuYWxpemF0aW9uJGZlYXR1cmUpCn0KYGBgCgpSZW1vdmluZyBwZW5hbGl6ZWQgZmVhdHVyZXMgZnJvbSB0aGUgdW5wZW5hbGl6ZWQgZGF0YXNldHMuCgpgYGB7cn0KaW1fbm9FR0FfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fbm9FR0EsIC1vbmVfb2YoZGlzY2FyZCkpCmltX25vRUdBX0RPU19wZW4gPC0gZHBseXI6OnNlbGVjdChpbV9ub0VHQV9ET1MsIC1vbmVfb2YoZGlzY2FyZCkpCmltX0VHQV9wZW4gPC0gZHBseXI6OnNlbGVjdChpbV9FR0EsIC1vbmVfb2YoZGlzY2FyZCkpCmltX0VHQV9ET1NfcGVuIDwtIGRwbHlyOjpzZWxlY3QoaW1fRUdBX0RPUywgLW9uZV9vZihkaXNjYXJkKSkKYGBgCgpTYXZpbmcgcGVuYWxpemVkIGRhdGFzZXRzLgoKYGBge3J9CndyaXRlLmNzdihpbV9ub0VHQV9wZW4sIHBhc3RlMChvdXRfcGF0aCwgIi9pbW11bm9tZV9ub0VHQV9wZW5fT09MLmNzdiIpLCByb3cubmFtZXM9RkFMU0UpCndyaXRlLmNzdihpbV9ub0VHQV9ET1NfcGVuLCBwYXN0ZTAob3V0X3BhdGgsICIvaW1tdW5vbWVfbm9FR0FfRE9TX3Blbl9PT0wuY3N2IiksIHJvdy5uYW1lcz1GQUxTRSkKd3JpdGUuY3N2KGltX0VHQV9wZW4sIHBhc3RlMChvdXRfcGF0aCwgIi9pbW11bm9tZV9FR0FfcGVuX09PTC5jc3YiKSwgcm93Lm5hbWVzPUZBTFNFKQp3cml0ZS5jc3YoaW1fRUdBX0RPU19wZW4sIHBhc3RlMChvdXRfcGF0aCwgIi9pbW11bm9tZV9FR0FfRE9TX3Blbl9PT0wuY3N2IiksIHJvdy5uYW1lcz1GQUxTRSkKYGBgCg==</div>
 
 
 

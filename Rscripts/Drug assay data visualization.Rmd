@@ -49,19 +49,19 @@ Importing preprocessed penalized data
 ```{r}
 pen_final_data <- read.csv(paste0(drug_assay_path, "/Preprocessed Data/preprocessed_pen.csv")) %>%
                   # Removing the asinh transform of unstim_0
-                  filter(dose >= 0)
+                  dplyr::filter(dose >= 0)
 ```
 
 ```{r}
 AllPenDoseresponse <- pen_final_data %>%
     # Adding a D in front of the dose value
-    mutate(dose = paste0("D", dose)) %>%
+    dplyr::mutate(dose = paste0("D", dose)) %>%
     dcast(ID + population + reagent + drug + stimulation ~ dose, value.var = "feature") %>%
     # feature = population_reagent_stimulation
-    mutate(feature=paste0(population, "_", reagent, "_", stimulation)) %>% 
+    dplyr::mutate(feature=paste0(population, "_", reagent, "_", stimulation)) %>% 
     pivot_longer(cols = c("D0", "D1", "D10", "D100", "D1000")) %>%
     rename("dose" = "name") %>%
-    select(c("ID", "feature", "drug", "dose", "value")) %>%
+    dplyr::select(c("ID", "feature", "drug", "dose", "value")) %>%
     na.omit()
 
 head(AllPenDoseresponse)
@@ -138,6 +138,8 @@ top_n_var_features_boxplot_grid <-function(target_dose, n){
 }
 ```
 
+The plots are accessible in the folder /Plots/Drug assay data visualization
+
 ```{r}
 ###### WARNING THIS CELL TAKES 15-20min TO RUN ! ###### 
 
@@ -168,7 +170,7 @@ plot_feature_drug_boxplot <- function(target_feature, target_drug){
 }
 ```
 
-Plotting all the data
+Plotting all the data (the plots are accessible in the folder /Plots/Drug assay data visualization).
 
 ```{r}
 ###### WARNING THIS CELL TAKES MORE THAN 1 HOUR TO RUN ! ######
@@ -188,7 +190,7 @@ for (i in 0:(length(unique(AllPenDoseresponse$feature))-1)){
 dev.off()
 ```
 
-Plotting all the features selected by the OOL model
+Plotting all the features selected by the OOL model (the plots are accessible in the folder /Plots/Drug assay data visualization).
 
 ```{r}
 # feature.index
