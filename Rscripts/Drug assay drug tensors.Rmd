@@ -162,9 +162,6 @@ Importing the data
 # drug.effect.tensors
 load(paste0(out_path, "/drug effect tensors.rda"))
 
-# clusters
-load(paste0(OOL_path, "/Patients clustering/Cluster 53 OOL patients around 4 drug assay patients.rda"))
-
 # Keeping a copy of OOL_data
 original.OOL_data <- OOL_data
 
@@ -249,17 +246,17 @@ i <- 0
 # Applying simulate.sample.data.under.all.drugs to all the samples with all concentrations
 individual.simulated.data <- c()
 for (sample_ID in rownames(OOL_data)){
+  # Extracting patient ID
+  patient_id <- gsub("P(\\d+)_.*", "\\1", sample_ID)
   for (c_k in 1:4){
     # Progress bar
     setTxtProgressBar(pb, i)
-    # Extracting patient ID
-    patient_id <- gsub("P(\\d+)_.*", "\\1", sample_ID)
-    # Getting the centroid corresponding to the ID
-    centroid_id <- which(sapply(clusters, function(vec) patient_id %in% vec))
-    # Simulating new data
-    simulated.data <- simulate.sample.data.with.drug.effect(sample_ID, c_k, centroid_id)
-    # Aggregating the new simulated data
-    individual.simulated.data <- rbind(individual.simulated.data, simulated.data)
+    for (centroid_id in 1:4){
+      # Simulating new data
+      simulated.data <- simulate.sample.data.with.drug.effect(sample_ID, c_k, centroid_id)
+      # Aggregating the new simulated data
+      individual.simulated.data <- rbind(individual.simulated.data, simulated.data)
+    }
     # Incremental for progress bar
     i <- i+1
   }
