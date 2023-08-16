@@ -136,23 +136,21 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   }
   if(parm$scale=='Patient')
   {
-    #NEW#
     sclidx= which(foldid==unique(foldid)[i])
     if(length(sclidx)>1){
       patient.col.means = colMeans(X[sclidx,]) # Storing means to apply same scaling to simulated data
+    }else{
+      patient.col.means = rep(0., dim(X)[2]) 
+      names(patient.col.means) = colnames(X)
     }
-    #####
+
     for(ap in seq(length(unique(foldid))))
     {
       sclidx= which(foldid==unique(foldid)[ap])
       if(length(sclidx)>1)
         X[sclidx]=scale(X[sclidx], scale=F)
     }
-    # print('------------')
-    # print(patient.col.means[["Tregs_STAT6_IL246"]])
-    # print(length(patient.col.means))
-    # print(class(patient.col.means))
-    # print('------------')
+    
     original.X=X # Keeping a copy of X without any columns removed and before scaling
     X=scale(X) #creates NA values for 10 features
     rm_columns <- which(colSums(is.na(X)) > 0) # Getting the columns that are removed
@@ -228,15 +226,8 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
     # Getting X before scaling but only with the features which were filtered
     unscaled.X = original.X[,!(colnames(original.X) %in% ret$rm_cols)]
     means = colMeans(unscaled.X)
-    # print('------------')
-    # print(means[["Tregs_STAT6_IL246"]])
-    # print(length(means))
-    # print('------------')
     sds = colSds(unscaled.X)
-    # print('------------')
-    # print(sds[["Tregs_STAT6_IL246"]])
-    # print(length(sds))
-    # print('------------')
+    
     # Filtering the samples of the patients in the test set
     ret$median.simulated.TTL <- subset(median.simulated.data, grepl(paste0("P",unique(foldid)[i],"_"),sampleID))
     ret$individual.simulated.TTL <- subset(individual.simulated.data, grepl(paste0("P",unique(foldid)[i],"_"),sampleID))
@@ -292,7 +283,6 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
 
   return(ret)
 }
-ret <- xxx(data.matrix(CYTOF), Yh, Id, 10, parm, TRUE)
 ```
 
 Prediction of the model
@@ -429,7 +419,7 @@ best_pval_thresholds <- list("Lasso.1se"=best_lasso_threshold,
 ## Building the best models according to pvalue thresholding optimizaton
                              
 ```{r}
-######################### WARNING : THIS CELL TAKES 20-30min TO RUN ! #########################
+######################### WARNING : THIS CELL TAKES 1H30 TO RUN ! #########################
 
 # Building the best models and storing them and their predictions
 for (model.name in names(best_pval_thresholds)){
@@ -444,7 +434,7 @@ for (model.name in names(best_pval_thresholds)){
   cl <- makeSOCKcluster(detectCores())
   registerDoSNOW(cl)
   # Getting models and predictions
-  prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, TRUE)
+  prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble", "matrixStats")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, TRUE)
   list_preds<-aggregation.of.predictions(prdC)
   # Closing backend configuration
   stopCluster(cl)
@@ -486,7 +476,7 @@ Visualization of the performances of the models (you can look at the plot in the
 
 ```{r}
 # X axis
-x_axis="DOS" # EGA or DOS
+x_axis="EGA" # EGA or DOS
 
 # Plot function
 plot.model.results <- function(y_pred, y_true, ega, title, x_name="DOS"){
@@ -499,16 +489,22 @@ plot.model.results <- function(y_pred, y_true, ega, title, x_name="DOS"){
     data <- data.frame(x = y_true, y = y_pred)
     linear.model.fit <- lm(y_pred ~ y_true, data)
     dash_coefs=c(coef(linear.model.fit)[["(Intercept)"]],coef(linear.model.fit)[["y_true"]])
-    x.limits <- c(-100, 0)
-    y.limits <- c(-100, 0)
+    y_reg = dash_coefs[1] + dash_coefs[2]*y_true
+    myr2 = 1 - sum((y_reg - y_pred)^2) / sum((y_pred - mean(y_pred))^2)
+    x.limits <- c(-110, 0)
+    y.limits <- c(-110, 0)
   }else if (x_name=="EGA"){
-    dash_coefs=c(-259, 6.5)
     data <- data.frame(x = ega, y = y_pred)
-    x.limits <- c(22,40)
-    y.limits <- c(-120, 0)
+    linear.model.fit <- lm(y ~ x, data)
+    dash_coefs=c(coef(linear.model.fit)[["(Intercept)"]],coef(linear.model.fit)[["x"]])
+    y_reg = dash_coefs[1] + dash_coefs[2]*ega
+    myr2 = 1 - sum((y_reg - y_pred)^2) / sum((y_pred - mean(y_pred))^2)
+    x.limits <- c(22,35)
+    y.limits <- c(-110, 0)
   }else{
     dash_coefs=c(0., 1.)
     data <- data.frame(x = NA, y = NA)
+    myr2 = NA
     x.limits <- c(-1, 0)
     y.limits <- c(-1, 0)
   }
@@ -532,8 +528,9 @@ plot.model.results <- function(y_pred, y_true, ega, title, x_name="DOS"){
               axis.text.x = element_text(size = 10),
               axis.text.y = element_text(size = 10),
               axis.line.x = element_line(),
-              axis.line.y = element_line()) +
-        coord_fixed()
+              axis.line.y = element_line())
+    
+    if (x_name == "DOS"){ p <- p + coord_fixed()}
   
   print(p)
 }
@@ -555,7 +552,7 @@ for (model.name in names(best_pval_thresholds)){
 
 ```{r}
 # Model chosen
-model.name = "Random.Forest" # ElasticNet or Ridge.Regression or Lasso.1se or Adaptive.Lasso or Random.Forest
+model.name = "Adaptive.Lasso" # ElasticNet or Ridge.Regression or Lasso.1se or Adaptive.Lasso or Random.Forest
 # list_preds
 load(paste0(out_path, "/best ", model.name," predictions.rda"))
 # prdC
@@ -699,7 +696,7 @@ population_reagent_unstim_interest <- subset(feature.index, model_index > 0, sel
                                         distinct(feature) %>%
                                         unlist()
 # Setting the time to labor of the four patients from the drug assay study
-centroids.TTL <- c(-84,-84,-84,-84)
+centroids.TTL <- c(-79,-81,-81,-70)
 # Getting the centroids (4 patients)
 drug_assay_unstim_0 <- subset(read.csv(paste(drug_assay_path, "/Preprocessed Data/preprocessed_pen.csv", sep = "/")),
                                              dose==-1,
@@ -858,10 +855,15 @@ All simulated predictions
 
 ```{r}
 all.simulated.predictions <- c()
+col_names <- c("drug", "sampleID", "centroid", "dose", "TTL.prediction")
 for (i in 1:length(prdC)){
   all.simulated.predictions <- rbind(all.simulated.predictions, 
-                                     prdC[[i]]$median.simulated.TTL %>% rename("TTL.prediction"="median_predictions"), 
-                                     prdC[[i]]$individual.simulated.TTL %>% rename("TTL.prediction"="individual_predictions"))
+                                     prdC[[i]]$median.simulated.TTL %>% rename_all(~col_names),
+                                     prdC[[i]]$individual.simulated.TTL %>% 
+                                        dplyr::mutate(patientID = str_extract(sampleID, "\\d+")) %>% 
+                                        rowwise() %>% dplyr::filter(patientID %in% clusters[[centroid]]) %>% 
+                                        dplyr::select(-patientID) %>% 
+                                        rename_all(~col_names))
 }
 ```
 
