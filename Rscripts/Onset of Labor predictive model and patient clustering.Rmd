@@ -126,6 +126,8 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
   suppressMessages(library(randomForest, quietly = TRUE))
   suppressMessages(library(glmnet, quietly = TRUE))
   set.seed(2018+123*i)
+  
+  original.X=X # Keeping a copy of X without any columns removed and before scaling
 
   iInd=which(foldid==unique(foldid)[i])
   if(length(iInd)<2){
@@ -150,8 +152,7 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
       if(length(sclidx)>1)
         X[sclidx]=scale(X[sclidx], scale=F)
     }
-    
-    original.X=X # Keeping a copy of X without any columns removed and before scaling
+  
     X=scale(X) #creates NA values for 10 features
     rm_columns <- which(colSums(is.na(X)) > 0) # Getting the columns that are removed
     X=X[, complete.cases(t(X))] #we remove those features
@@ -235,22 +236,22 @@ xxx<-function(X, Y, foldid, i, parm, predict.simulated.data=FALSE)
     # Applying CYTOF preprocessing to the median simulated data
     median_prepro_data <- dplyr::select(ret$median.simulated.TTL, -c(drug, sampleID, centroid, dose)) %>%
         # Removing the columns which were removed in CYTOF
-        dplyr::select(intersect(colnames(CYTOF),colnames(ret$median.simulated.TTL)), -names(ret$rm_cols)) %>%
+        dplyr::select(intersect(colnames(original.X),colnames(ret$median.simulated.TTL)), -names(ret$rm_cols)) %>%
         # Imputing the missing values with the medians of the corresponding CYTOF columns
-        mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
+        dplyr::mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
         # Applying the patient and gobal scaling applyed to the training data
-        mutate(across(everything(), ~ (. - patient.col.means[[cur_column()]] - means[[cur_column()]])/sds[[cur_column()]])) %>%
+        dplyr::mutate(across(everything(), ~ (. - patient.col.means[[cur_column()]] - means[[cur_column()]])/sds[[cur_column()]])) %>%
         # Converting to a matrix
         as.matrix()
     
     # Applying CYTOF preprocessing to the individual simulated data
     individual_prepro_data <- dplyr::select(ret$individual.simulated.TTL, -c(drug, sampleID, centroid, dose)) %>%
         # Removing the columns which were removed in CYTOF
-        dplyr::select(intersect(colnames(CYTOF),colnames(ret$individual.simulated.TTL)), -names(ret$rm_cols)) %>%
+        dplyr::select(intersect(colnames(original.X),colnames(ret$individual.simulated.TTL)), -names(ret$rm_cols)) %>%
         # Imputing the missing values with the medians of the corresponding CYTOF columns
-        mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
+        dplyr::mutate(across(everything(), ~ ifelse(is.na(.), median(CYTOF[[cur_column()]], na.rm = TRUE), .))) %>%
         # Applying the patient and gobal scaling applyed to the training data
-        mutate(across(everything(), ~ (. - patient.col.means[[cur_column()]] - means[[cur_column()]])/sds[[cur_column()]])) %>%
+        dplyr::mutate(across(everything(), ~ (. - patient.col.means[[cur_column()]] - means[[cur_column()]])/sds[[cur_column()]])) %>%
         # Converting to a matrix
         as.matrix()
 
@@ -344,7 +345,7 @@ for (pval_threshold in pval_thresholds){
   cl <- makeSOCKcluster(detectCores())
   registerDoSNOW(cl)
   # Getting the predictions
-  prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, FALSE)
+  prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble", "matrixStats"), .export = c("CYTOF")) %dopar% xxx(data.matrix(CYTOF), Yh, Id, i, parm, FALSE)
   # Closing backend configuration
   stopCluster(cl)
   # Getting the list of the best spearmanr score among the 5 models
@@ -464,7 +465,7 @@ parm$predict.model="ElasticNet"
 cl <- makeSOCKcluster(detectCores())
 registerDoSNOW(cl)
 # Getting models and predictions
-prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble")) %dopar% xxx(data.matrix(CYTOF_EGA), Yh, Id, i, parm, TRUE)
+prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble", "matrixStats"), .export=c("CYTOF")) %dopar% xxx(data.matrix(CYTOF_EGA), Yh, Id, i, parm, TRUE)
 list_preds<-aggregation.of.predictions(prdC)
 # Closing backend configuration
 stopCluster(cl)
@@ -548,108 +549,202 @@ for (model.name in names(best_pval_thresholds)){
 }
 ```
 
-## Importing selected model and its predictions
-
-```{r}
-# Model chosen
-model.name = "Adaptive.Lasso" # ElasticNet or Ridge.Regression or Lasso.1se or Adaptive.Lasso or Random.Forest
-# list_preds
-load(paste0(out_path, "/best ", model.name," predictions.rda"))
-# prdC
-load(paste0(out_path, "/best ", model.name,".rda"))
-# key to fetch the model's coefs in prdC
-if (model.name == "Random.Forest"){
-  coef_key <- "rd_forest_importance"
-}else if(model.name == "ElasticNet"){
-  coef_key <- "EN_coef"
-}else if(model.name == "Lasso.1se"){
-  coef_key <- "coef"
-}else if(model.name == "Ridge.Regression"){
-  coef_key <- "ridge_coef"
-}else if(model.name == "Adaptive.Lasso"){
-  coef_key <- "alasso_coef"
-}else{
-  coef_key <- NULL
-}
-```
-
 ## Model Index
 
-Creation of a vector of the columns that are removed when building the model.
-
 ```{r}
-rm_cols <- c()
-for (iter in seq(prdC)){
-  rm_cols <- c(rm_cols, prdC[[iter]]$rm_cols)
+get.feature.index <- function(model.name, on.best.feature=FALSE, CYTOF.data = CYTOF){
+  #Importing selected model and its predictions
+  if (on.best.feature){
+    # list_preds
+    load(paste0(out_path, "/", model.name," on best features predictions.rda"))
+    # prdC
+    load(paste0(out_path, "/", model.name," on best features.rda"))
+  }else{
+    # list_preds
+    load(paste0(out_path, "/best ", model.name," predictions.rda"))
+    # prdC
+    load(paste0(out_path, "/best ", model.name,".rda"))
+  }
+  
+  # key to fetch the model's coefs in prdC
+  if (model.name == "Random.Forest"){
+    coef_key <- "rd_forest_importance"
+  }else if(model.name == "ElasticNet"){
+    coef_key <- "EN_coef"
+  }else if(model.name == "Lasso.1se"){
+    coef_key <- "coef"
+  }else if(model.name == "Ridge.Regression"){
+    coef_key <- "ridge_coef"
+  }else if(model.name == "Adaptive.Lasso"){
+    coef_key <- "alasso_coef"
+  }else{
+    coef_key <- NULL
+  }
+  
+  # Creation of a vector of the columns that are removed when building the model.
+  rm_cols <- c()
+  for (iter in seq(prdC)){
+    rm_cols <- c(rm_cols, prdC[[iter]]$rm_cols)
+  }
+  rm_cols <- unique(rm_cols)
+
+  # Creation of the feature index
+  if (model.name=="Random.Forest"){
+    feature.index <- data.frame(feature = character(),
+                              pval = double(),
+                              mean_abs_coef = double(),
+                              model_index = double(),
+                              stringsAsFactors = FALSE)
+  }else{
+    feature.index <- data.frame(feature = character(),
+                              pval = double(),
+                              mean_relative_node_purity = double(),
+                              model_index = double(),
+                              stringsAsFactors = FALSE)
+  }
+  
+  if (length(rm_cols) > 0){
+    cols <- colnames(CYTOF.data[,-rm_cols])
+  }else{
+    cols <- colnames(CYTOF.data)
+  }
+  
+  for (i in seq(1, length(cols))){
+    # Name of the feature
+    feature <- cols[i]
+    # P value based on a spearman test
+    pval <- cor.test(Yh, CYTOF.data[[feature]], method = 'spearman', exact = FALSE)$p.value
+    # Coefficient of relative node purity given by the model
+    if (model.name=="Random.Forest"){
+      # Collecting all the node purity of the selected features
+      relative_node_purity <- c()
+      for (iter in seq(prdC)){
+        relative_node_purity[iter] <- prdC[[iter]][[coef_key]][feature,"IncNodePurity"]/
+          max(prdC[[iter]][[coef_key]][,"IncNodePurity"])
+      }
+      # Mean of the relative node purity
+      mean_relative_node_purity <- mean(relative_node_purity)
+      # Adding the feature to feature.index
+      feature.index <- rbind(feature.index,
+                             data.frame(feature=feature,
+                                        pval=pval,
+                                        mean_relative_node_purity=mean_relative_node_purity,
+                                        model_index=-mean_relative_node_purity*log10(pval),
+                                        stringsAsFactors = FALSE))
+    }else{
+      # Collecting all the absolute values of the coefficients of the model
+      coefs <- c()
+      for (iter in seq(prdC)){
+        coefs[iter] <- abs(prdC[[iter]][[coef_key]][i])
+      }
+      # Mean of the coefficients
+      mean_abs_coef <- mean(coefs)
+      # Adding the feature to feature.index
+      feature.index <- rbind(feature.index,
+                             data.frame(feature=feature,
+                                        pval=pval,
+                                        mean_abs_coef=mean_abs_coef,
+                                        model_index=-abs(mean_abs_coef)*log10(pval),
+                                        stringsAsFactors = FALSE))
+    }
+  }
+  feature.index <- feature.index %>% arrange(desc(model_index))
 }
-rm_cols <- unique(rm_cols)
 ```
 
-Creation of the feature index
+Example of model index for Adaptive.Lasso
 
 ```{r}
-if (model.name=="Random.Forest"){
-  feature.index <- data.frame(feature = character(),
-                            pval = double(),
-                            mean_abs_coef = double(),
-                            model_index = double(),
-                            stringsAsFactors = FALSE)
-}else{
-  feature.index <- data.frame(feature = character(),
-                            pval = double(),
-                            mean_relative_node_purity = double(),
-                            model_index = double(),
-                            stringsAsFactors = FALSE)
-}
-
-cols <- colnames(CYTOF[,-rm_cols])
-
-for (i in seq(1, length(cols))){
-  # Name of the feature
-  feature <- cols[i]
-  # P value based on a spearman test
-  pval <- cor.test(Yh, CYTOF[[feature]], method = 'spearman', exact = FALSE)$p.value
-  # Coefficient of relative node purity given by the model
-  if (model.name=="Random.Forest"){
-    # Collecting all the node purity of the selected features
-    relative_node_purity <- c()
-    for (iter in seq(prdC)){
-      relative_node_purity[iter] <- prdC[[iter]][[coef_key]][feature,"IncNodePurity"]/
-        max(prdC[[iter]][[coef_key]][,"IncNodePurity"])
-    }
-    # Mean of the relative node purity
-    mean_relative_node_purity <- mean(relative_node_purity)
-    # Adding the feature to feature.index
-    feature.index <- rbind(feature.index,
-                           data.frame(feature=feature,
-                                      pval=pval,
-                                      mean_relative_node_purity=mean_relative_node_purity,
-                                      model_index=-mean_relative_node_purity*log10(pval),
-                                      stringsAsFactors = FALSE))
-  }else{
-    # Collecting all the absolute values of the coefficients of the model
-    coefs <- c()
-    for (iter in seq(prdC)){
-      coefs[iter] <- abs(prdC[[iter]][[coef_key]][i])
-    }
-    # Mean of the coefficients
-    mean_abs_coef <- mean(coefs)
-    # Adding the feature to feature.index
-    feature.index <- rbind(feature.index,
-                           data.frame(feature=feature,
-                                      pval=pval,
-                                      mean_abs_coef=mean_abs_coef,
-                                      model_index=-abs(mean_abs_coef)*log10(pval),
-                                      stringsAsFactors = FALSE))
-  }
-}
-feature.index <- feature.index %>% arrange(desc(model_index))
+feature.index <- get.feature.index("Adaptive.Lasso")
 feature.index
+```
+
+## Models on best features
+
+Getting the features selected by all the best models
+
+```{r}
+# Getting the intersection of all selected features by the 5 models
+best.features <- unique(AllPenDoseresponse$feature)
+for (model.name in names(best_pval_thresholds)){
+  feature.index <- get.feature.index(model.name)
+  selected.features <- feature.index[feature.index[,"model_index"]>0, "feature"]
+  best.features <- intersect(best.features, selected.features)
+}
+
+# Saving the list of features selected by all models
+save(feature.index, file=paste0(out_path, "/feature_index.rda"))
+
+# Extracting the CYTOF dataset restricted to these features
+restricted.CYTOF <- dplyr::select(CYTOF, best.features)
+```
+
+Building models on the best features only
+
+```{r}
+######################### WARNING : THIS CELL TAKES 1H30 TO RUN ! #########################
+
+# Building the best models and storing them and their predictions
+for (model.name in names(best_pval_thresholds)){
+  # xxx parameter
+  parm=list()
+  parm$scale='Patient'
+  parm$a=0.5
+  npt=length(unique(Id))
+  parm$predict.model=model.name
+  parm$pval_threshold=1000
+  # Opening backend-configuration
+  cl <- makeSOCKcluster(detectCores())
+  registerDoSNOW(cl)
+  # Getting models and predictions
+  prdC=foreach(i=seq(npt),.packages = c("dplyr", "tibble", "matrixStats"), .export = c("CYTOF")) %dopar% xxx(data.matrix(restricted.CYTOF), Yh, Id, i, parm, TRUE)
+  list_preds<-aggregation.of.predictions(prdC)
+  # Closing backend configuration
+  stopCluster(cl)
+  # Saving the models and their predictions
+  save(prdC, file=paste0(out_path, "/", model.name," on best features.rda"))
+  save(list_preds, file=paste0(out_path, "/", model.name," on best features predictions.rda"))
+}
+```
+
+Plotting the new models
+
+```{r}
+# X axis
+x_axis="DOS" # EGA or DOS
+
+# Plotting the results of the models on best features
+for (model.name in names(best_pval_thresholds)){
+  load(paste0(out_path, "/", model.name," on best features predictions.rda"))
+  y_pred <- list_preds[[model.name]]
+  pdf(file=paste0(plot_path, "/", model.name, " on best features on ",x_axis," outcomes.pdf"))
+  plot.model.results(y_pred[preterm_rows], Yh[preterm_rows], EGA[preterm_rows], paste0(model.name, " on preterm"), x_axis)
+  plot.model.results(y_pred[-preterm_rows], Yh[-preterm_rows], EGA[-preterm_rows], paste0(model.name, " on term"), x_axis)
+  plot.model.results(y_pred, Yh, EGA, paste0(model.name, " on all"), x_axis)
+  dev.off()
+}
+```
+
+Looking at the number of selected features
+
+```{r}
+for (model.name in names(best_pval_thresholds)){
+  feature.index <- get.feature.index(model.name, on.best.feature = TRUE, CYTOF.data = restricted.CYTOF)
+  selected.features <- feature.index[feature.index[,"model_index"]>0, "feature"]
+  print(paste0(model.name, " : ", length(selected.features), " selected features"))
+}
+```
+Choosing one model to calculate the scores
+
+```{r}
+model.name = "Lasso.1se" # Lasso.1se or Ridge.Regression or ElasticNet or Adaptive.Lasso or Random.Forest
 ```
 
 Saving feature.index
 
 ```{r}
+feature.index <- get.feature.index(model.name, on.best.feature = TRUE, CYTOF.data = restricted.CYTOF)
+feature.index
 save(feature.index, file=paste0(out_path, "/feature_index.rda"))
 ```
 
@@ -680,6 +775,41 @@ x <- list(OOL_paper = c("CD56loCD16posNK_STAT1_IFNa",
                                 as.character())
 
 ggVennDiagram(x, label_alpha = 0)
+```
+## Importing selected model and its predictions
+
+Importing the model
+
+```{r}
+# We are interested in the model built on best features
+on.best.feature = TRUE
+
+if (on.best.feature){
+    # list_preds
+    load(paste0(out_path, "/", model.name," on best features predictions.rda"))
+    # prdC
+    load(paste0(out_path, "/", model.name," on best features.rda"))
+  }else{
+    # list_preds
+    load(paste0(out_path, "/best ", model.name," predictions.rda"))
+    # prdC
+    load(paste0(out_path, "/best ", model.name,".rda"))
+  }
+
+# key to fetch the model's coefs in prdC
+if (model.name == "Random.Forest"){
+  coef_key <- "rd_forest_importance"
+}else if(model.name == "ElasticNet"){
+  coef_key <- "EN_coef"
+}else if(model.name == "Lasso.1se"){
+  coef_key <- "coef"
+}else if(model.name == "Ridge.Regression"){
+  coef_key <- "ridge_coef"
+}else if(model.name == "Adaptive.Lasso"){
+  coef_key <- "alasso_coef"
+}else{
+  coef_key <- NULL
+}
 ```
 
 ## Patients clustering
@@ -792,19 +922,20 @@ data_points <- rbind(data_points,
 Plotting the clusters (you can look at the plot in the folder /Plots/Clustering)
 
 ```{r}
-# Filter out variables with variance not equal to zero
-filtered_data <- data_points %>% select_if(~sd(., na.rm = TRUE) != 0)
+# Filter out variables with variance not equal to zero or with too many NA
+filtered_data <- data_points %>% 
+                  select_if((~sd(., na.rm = TRUE) != 0)) %>%
+                  select_if(~ !any(is.na(.)))
 
 # Separating cluster number from actual coordinates
 patient_clusters  <- data_points$cluster %>% as.character()
-data <- dplyr::select(filtered_data, -cluster)
+data_pca <- dplyr::select(filtered_data, -cluster)
 
-# Imputing missing values and determining the optimal number of principal components to represent our data
-nb <- estim_ncpPCA(data,method.cv = "Kfold", verbose = FALSE)
-res.comp <- imputePCA(data, ncp = nb$ncp)
+# Determining the optimal number of principal components to represent our data
+nb <- estim_ncpPCA(data_pca, method.cv = "Kfold", verbose = FALSE)
 
 # Using PCA to project the points on a 2D surface
-imp <- cbind.data.frame(res.comp$completeObs,patient_clusters)
+imp <- cbind.data.frame(data_pca, patient_clusters)
 res.pca <- PCA(imp, quanti.sup = 1, quali.sup = dim(imp)[2], ncp = nb$ncp, graph=FALSE)
 
 # Dataframes for plot
@@ -916,7 +1047,7 @@ if (!file.exists(paste0(my_path, "/Plots/Drug effect delay distributions"))){dir
 for (centroid.val in unique(all.simulated.predictions$centroid)){
   pdf(paste0(my_path, "/Plots/Drug effect delay distributions/Delay distribution for ", ifelse(centroid.val=="median","median effect", paste("cluster",centroid.val)), ".pdf"))
   for (c_k in 1:4){
-    plot_delay_distribution(c_k, centroid.val, 25, 40)
+    plot_delay_distribution(c_k, centroid.val)
   }
   dev.off()
 }
@@ -968,10 +1099,10 @@ plot_delay_distribution_across_clusters <- function(target_drug, c_k, EGA.inf=0,
 if (!file.exists(paste0(my_path, "/Plots/Drug effect delay distributions"))){dir.create(paste0(my_path, "/Plots/Drug effect delay distributions"))}
 
 # Plotting the best drug concentration effect on the different clusters
-target_drug = "Cefotaxime"
+target_drug = "Progesterone"
 c_k = 4
 
 pdf(paste0(my_path, "/Plots/Drug effect delay distributions/Delay distribution for ", target_drug, " dose=", 10^(c_k-1), " across 4 clusters.pdf"))
-plot_delay_distribution_across_clusters(target_drug, c_k, 30, 40)
+plot_delay_distribution_across_clusters(target_drug, c_k)
 dev.off()
 ```

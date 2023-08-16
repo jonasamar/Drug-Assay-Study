@@ -240,7 +240,7 @@ These are the features selected by our model.
 # we associate a coeff +1 (increasing) or -1 (decreasing) to the features
 
 # Timepoint of interest
-TTL <- -84
+TTL <- mean(-79, -81, -81, -70)
 
 # Thresholds to calculate the normal behavior of a given feature
 normal.behavior.slope.threshold <- 0.
@@ -451,7 +451,7 @@ Plotting the sigmoids of the drug on the chosen features versus the normal behav
 
 ```{r}
 # Time to labor of interest (will plot the derivative at this point)
-TTL <- -84
+TTL <- mean(-79, -81, -81, -70)
   
 for (target_drug in unique(AllPenDoseresponse$drug)){
   plots <- c()
@@ -480,11 +480,10 @@ for (target_drug in unique(AllPenDoseresponse$drug)){
       y_pred <- intercept + slope * DOS
       y_deriv <- slope*(DOS - TTL) + (intercept + slope * TTL)
     }
-    
-    df <- data.frame("x" = DOS, "y" = data[, target_feature], "y_pred" = y_pred, "y_deriv" = y_deriv) %>%
-            rename("y"=target_feature)
+     
+    df <- data.frame("x" = DOS, "y" = OOL_data[, target_feature], "y_pred" = y_pred, "y_deriv" = y_deriv)
     pval <- curve.classification[curve.classification$cytof == target_feature,]$pval
-      
+    
     # Plot
     plot <- ggplot(df, aes(x = x, y = y)) +
         geom_point(fill = "white", shape=1, color="grey", size = 0.8, na.rm = TRUE) +
@@ -566,7 +565,7 @@ Saving the heat maps for a chosen set of thresholds.
 
 ```{r}
 # Parameters for the heat map scores
-TTL <- -84
+TTL <- mean(-79, -81, -81, -70)
 normal.behavior.pval.threshold <- 1.
 normal.behavior.slope.threshold <- 0.
 list.ref.clustering.drug <- list("ID_median" = "Chlorthalidone", 

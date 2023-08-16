@@ -1,0 +1,6 @@
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Prediction model/best Lasso.1se.rda")
+ls()
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Prediction model/best Adaptive.Lasso.rda")
+ls()
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Prediction model/best Ridge.Regression.rda")
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Prediction model/best Random.Forest.rda")
