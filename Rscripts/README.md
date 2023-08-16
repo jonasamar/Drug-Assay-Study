@@ -29,15 +29,13 @@ This file is here to explain the order in which one should run the multiple R/Rm
 
 0 - install.R
 
-1 - Onset of Labor preprocessing
-2 - Onset of Labor curves classification (except two last plots)
-3 - Drug assay preprocessing
-4 - Onset of Labor predictive model and patients clustering (except last section Simulated drug effect visualization)
+1 - Drug assay preprocessing
+2 - Drug assay data visualization
+3 - Drug assay sigmoids fitting
+4 - Onset of Labor preprocessing
+5 - Onset of Labor curves classification (except two last plots)
 
-5 - Drug assay data visualization
-6 - Drug assay sigmoids fitting
-
-7 - Drug assay drug tensors
+6 - Drug assay drug tensors
+7 - Onset of Labor predictive model and patients clustering
 
 8 - Drug assay scores and visualization
-9 - Onset of Labor feature index and patient clustering (sections : Paths, Libraries, Importing and preprocessing data, Importing selected model and its predictions, Visualization of simulated drug effect)
