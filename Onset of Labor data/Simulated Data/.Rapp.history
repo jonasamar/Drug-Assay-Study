@@ -1,0 +1,3 @@
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Simulated Data/median simulated data.rda")
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Simulated Data/individual simulated data.rda")
+load("/Users/jonasamar/Desktop/Drug-Assay-Study/Onset of Labor data/Simulated Data/individual simulated data.rda")
