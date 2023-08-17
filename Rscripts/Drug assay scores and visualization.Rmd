@@ -280,7 +280,7 @@ OOL_features <- top.feature.index
 
 Calculation of the scores and ranking of the features.
 
-**drug.ranking :** dataframe containing the name of the drugs and their score.
+**list.drug.ranking :** list of dataframes containing the name of the drugs and their score when loooking at its effects on patient 1, 2, 3, 4 and median effect.
 
 ```{r}
 # This what one ranking dataframe look like
@@ -332,6 +332,15 @@ for (centroid in names(list.drug.ranking)){
   list.drug.ranking[[centroid]] <- list.drug.ranking[[centroid]] %>% arrange(desc(score))
 }
 list.drug.ranking
+```
+Comparison of the ranking with ranking from Computational discovery of therapeutic candidates for preventing preterm birth, Brian L. Le, Sota Iwatani, Ronald J. Wong, David K. Stevenson, and Marina Sirota.
+
+```{r}
+reference.ranking <- read.csv(paste0(drug_assay_path, "/Drug Assay Project Initial Data/reference_ranking.csv"), sep=";") %>% dplyr::mutate(old.rank = row_number())
+new.ranking <- list.drug.ranking$ID_4 %>% group_by(drug) %>% summarise(median.score = median(score)) %>% dplyr::mutate(new.rank = row_number()) %>% right_join(reference.ranking, by="drug")
+kendall_coef <- cor(new.ranking$old.rank, new.ranking$new.rank, method = "kendall")
+print(kendall_coef)
+#group_by(drug) %>% summarise(mean.score = mean(score)) %>% arange(desc(mean.score))...
 ```
 
 ## Visualization
